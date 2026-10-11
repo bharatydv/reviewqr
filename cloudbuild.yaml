@@ -1,0 +1,50 @@
+# Cloud Build: on every push to main, run the tests and then move the VM to
+# that commit.
+#
+# The trigger is created once by deploy/gcp-cloudbuild-setup.sh, which also
+# grants the build's service account the two roles it needs. After that,
+# deploying is `git push`.
+#
+# Nothing is copied from here to the VM: the repo is public, so the VM pulls
+# the commit itself. The secrets in /opt/reviewqr/.env and the Docker volumes
+# holding the database and the certificates are never touched by a deploy.
+
+steps:
+  # The tests gate the deploy: a red build never reaches the VM. In-memory
+  # database, the Anthropic call and Google both mocked, so this needs no
+  # network and no secrets.
+  - id: test
+    name: node:22-alpine
+    entrypoint: sh
+    args:
+      - -c
+      - |
+        set -e
+        npm ci --no-audit --no-fund
+        npm test
+
+  - id: deploy
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        gcloud compute ssh "$_VM" \
+          --zone="$_ZONE" \
+          --project="$PROJECT_ID" \
+          --quiet \
+          --command="sudo /opt/reviewqr/deploy/vm-update.sh $COMMIT_SHA"
+
+substitutions:
+  _VM: reviewqr
+  _ZONE: us-central1-a
+
+options:
+  # Required when the build runs as a service account of its own, which is now
+  # the only way new projects run builds.
+  logging: CLOUD_LOGGING_ONLY
+
+# The first build on a fresh VM compiles the image from scratch on one shared
+# vCPU, which is the slow case worth allowing for.
+timeout: 1800s

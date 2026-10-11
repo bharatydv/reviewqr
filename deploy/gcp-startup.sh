@@ -32,7 +32,7 @@ fi
 
 echo "=== packages ==="
 apt-get update -y
-apt-get install -y ca-certificates curl gnupg rsync unattended-upgrades
+apt-get install -y ca-certificates curl git gnupg rsync unattended-upgrades
 
 echo "=== docker, from Docker's own apt repository ==="
 # The signed repository rather than a piped install script, so apt verifies
@@ -61,6 +61,21 @@ echo "=== restart the app after a reboot ==="
 # compose already has restart: unless-stopped, which Docker honours on boot
 # once the daemon starts. This only makes sure the daemon starts.
 systemctl is-enabled docker
+
+echo "=== clone the app ==="
+# The repo is public, so this needs no credentials. Cloning here, rather than
+# copying files up, means a deploy is just a fetch on this machine - and it
+# puts deploy/vm-update.sh in place before the first deploy ever runs.
+REPO_URL="$(curl -fsS -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/attributes/repo-url || true)"
+if [ -n "${REPO_URL:-}" ] && [ ! -d /opt/reviewqr/.git ]; then
+  mkdir -p /opt/reviewqr
+  git clone --quiet "$REPO_URL" /opt/reviewqr
+  # The deploy runs as root in a directory git sees as another user's.
+  git config --global --add safe.directory /opt/reviewqr
+  echo "cloned $REPO_URL into /opt/reviewqr"
+else
+  echo "no repo-url metadata, or /opt/reviewqr is already a clone"
+fi
 
 touch /var/lib/reviewqr-host-ready
 echo "=== host ready ==="

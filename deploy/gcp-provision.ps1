@@ -29,7 +29,10 @@ param(
   [string]$Zone = 'us-central1-a',
   [string]$VmName = 'reviewqr',
   # Kept for compatibility; the Caddyfile no longer takes an ACME email.
-  [string]$AcmeEmail = ''
+  [string]$AcmeEmail = '',
+  # The public repo the VM pulls from. It clones this on first boot, and every
+  # deploy after that is a fetch on the machine itself.
+  [string]$RepoUrl = 'https://github.com/bharatydv/reviewqr.git'
 )
 
 # gcloud writes progress to stderr, which Windows PowerShell would otherwise
@@ -139,6 +142,9 @@ if ($LASTEXITCODE -eq 0) {
 if ($LASTEXITCODE -eq 0) {
   Say "VM $VmName already exists, leaving it alone"
 } else {
+  # enable-oslogin lets Cloud Build's service account ssh in through IAM
+  # instead of anyone managing SSH keys; repo-url tells the first boot what to
+  # clone.
   Say "creating the $VmName VM (e2-micro, Debian 12) in $Zone"
   & gcloud compute instances create $VmName `
     --project=$Project `
@@ -151,6 +157,7 @@ if ($LASTEXITCODE -eq 0) {
     --tags="$VmName" `
     --address=$address `
     --metadata-from-file=startup-script=deploy/gcp-startup.sh `
+    --metadata="repo-url=$RepoUrl,enable-oslogin=TRUE" `
     --labels=app=reviewqr
   if ($LASTEXITCODE -ne 0) { Die 'Could not create the VM.' }
 }
