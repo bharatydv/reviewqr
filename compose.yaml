@@ -1,0 +1,55 @@
+# ReviewQR behind Caddy, which gets and renews the HTTPS certificate itself.
+#
+# This is the production setup, used on the GCP VM. It reads .env from the same
+# directory; deploy/gcp-deploy.ps1 copies .env.production up as that .env.
+#
+# SITE_ADDRESS is the hostname Caddy answers on and must match BASE_URL, which
+# is what the QR codes encode. Both have to be a real hostname pointed at the
+# machine: Caddy cannot get a certificate otherwise, and the app refuses to
+# start in production with a non-https BASE_URL. So this does not run as-is on
+# a laptop - for local work use `npm start`, or the plain `docker run` in the
+# README's Docker section.
+
+services:
+  app:
+    build: .
+    image: reviewqr:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # The app only ever talks to Caddy, so it stays on the internal network
+      # and its SQLite file lives on a named volume.
+      NODE_ENV: production
+      PORT: '3000'
+      DB_PATH: /data/reviewqr.db
+      # Caddy sets X-Forwarded-For; without this every request would look like
+      # it came from Caddy and the per-IP rate limits would apply to all
+      # customers at once.
+      TRUST_PROXY: '1'
+    volumes:
+      - reviewqr-data:/data
+    expose:
+      - '3000'
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      # Interpolated from .env. Caddy reads it as {$SITE_ADDRESS}.
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env, e.g. reviews.example.com}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here. Keep this volume and a redeploy does not ask
+      # Let's Encrypt for a new certificate, which is rate limited.
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  reviewqr-data:
+  caddy-data:
+  caddy-config:

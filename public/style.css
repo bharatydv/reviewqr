@@ -1,0 +1,747 @@
+/* ReviewQR - calm, mobile first, one teal accent and amber stars. */
+
+:root {
+  --ink: #101418;
+  --ink-soft: #2b333a;
+  --mist: #f3f5f4;
+  --paper: #ffffff;
+  --line: #dfe4e3;
+  --muted: #55606a;
+  --teal: #0f7a6c;
+  --teal-dark: #0a5a4f;
+  --teal-wash: #e7f2f0;
+  --amber: #b07708;
+  --danger: #a32316;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(16, 20, 24, 0.06);
+  --heading: 'Bricolage Grotesque', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --body: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--mist);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--heading);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+}
+
+h3 {
+  font-size: 1rem;
+}
+
+p {
+  margin: 0 0 0.75rem;
+}
+
+a {
+  color: var(--teal-dark);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+/* Visible focus everywhere, never removed. */
+:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.site-header {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.85rem 1rem;
+}
+
+.site-header a {
+  color: var(--paper);
+  font-family: var(--heading);
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.site-header .tag {
+  color: #b9c3c1;
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+}
+
+main {
+  margin: 0 auto;
+  max-width: 420px;
+  padding: 1rem 1rem 3rem;
+}
+
+.card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 1rem;
+  padding: 1rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.sr-only {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* ------------------------------------------------------------ rating summary */
+
+.summary {
+  align-items: baseline;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.summary .average {
+  font-family: var(--heading);
+  font-size: 2.1rem;
+  font-weight: 600;
+}
+
+.stars {
+  color: var(--amber);
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+}
+
+.stars .off {
+  color: #c9cfce;
+}
+
+.breakdown {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.85rem;
+}
+
+.breakdown-row {
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 2.4rem 1fr 1.8rem;
+}
+
+.breakdown-row .label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.bar {
+  background: #eceeed;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.bar span {
+  background: var(--amber);
+  display: block;
+  height: 100%;
+  width: 0;
+}
+
+.breakdown-row .count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+/* -------------------------------------------------------------------- reviews */
+
+.review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Dividers rather than a card per review. */
+.review-list li {
+  border-top: 1px solid var(--line);
+  padding: 0.85rem 0;
+}
+
+.review-list li:first-child {
+  border-top: 0;
+  padding-top: 0.35rem;
+}
+
+.review-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
+}
+
+.review-head .who {
+  font-weight: 600;
+}
+
+.review-head .when {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.review-body {
+  margin: 0.35rem 0 0;
+}
+
+.mine {
+  background: var(--teal-wash);
+  border: 1px solid #c6ded9;
+  border-radius: var(--radius);
+  padding: 0.85rem;
+}
+
+/* The business's answer, set in under the review it belongs to. */
+.reply {
+  border-left: 3px solid var(--line);
+  margin: 0.55rem 0 0;
+  padding: 0.1rem 0 0.1rem 0.7rem;
+}
+
+.reply .who {
+  color: var(--teal-dark);
+}
+
+.reply-form {
+  margin-top: 0.6rem;
+}
+
+.badge {
+  background: var(--teal);
+  border-radius: 999px;
+  color: var(--paper);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.5rem;
+}
+
+/* --------------------------------------------------------------------- forms */
+
+fieldset {
+  border: 0;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+legend,
+.field-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  padding: 0;
+}
+
+label {
+  display: block;
+}
+
+input[type='text'],
+input[type='email'],
+input[type='password'],
+textarea {
+  background: var(--paper);
+  border: 1px solid #c3cbc9;
+  border-radius: 10px;
+  color: var(--ink);
+  font: inherit;
+  margin-bottom: 0.75rem;
+  min-height: 44px;
+  padding: 0.6rem 0.7rem;
+  width: 100%;
+}
+
+textarea {
+  line-height: 1.5;
+  min-height: 140px;
+  resize: vertical;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #7b858d;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: -0.5rem 0 0.75rem;
+}
+
+button {
+  align-items: center;
+  background: var(--teal);
+  border: 1px solid var(--teal);
+  border-radius: 10px;
+  color: var(--paper);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.6rem 1rem;
+  width: 100%;
+}
+
+button:hover {
+  background: var(--teal-dark);
+  border-color: var(--teal-dark);
+}
+
+button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+button.secondary {
+  background: var(--paper);
+  border-color: #c3cbc9;
+  color: var(--ink);
+}
+
+button.secondary:hover {
+  background: #eef1f0;
+}
+
+button.danger {
+  background: var(--paper);
+  border-color: #e0b7b2;
+  color: var(--danger);
+}
+
+button.danger:hover {
+  background: #fdf2f1;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.row button {
+  flex: 1;
+}
+
+/* Star rating as an accessible radio group. */
+.rating-group {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.rating-group input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rating-group label {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #c0c7c5;
+  cursor: pointer;
+  display: flex;
+  font-size: 1.75rem;
+  height: 44px;
+  justify-content: center;
+  line-height: 1;
+  width: 44px;
+}
+
+.rating-group label:hover {
+  color: var(--amber);
+}
+
+.rating-group input:checked + label,
+.rating-group.filled label.on {
+  color: var(--amber);
+}
+
+.rating-group input:focus-visible + label {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.rating-caption {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.35rem 0 0;
+  min-height: 1.4rem;
+}
+
+/* Topic chips. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.chips input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chips label {
+  align-items: center;
+  background: var(--paper);
+  border: 1px solid #c3cbc9;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  min-height: 44px;
+  padding: 0.4rem 0.95rem;
+}
+
+.chips input:checked + label {
+  background: var(--teal-wash);
+  border-color: var(--teal);
+  color: var(--teal-dark);
+  font-weight: 600;
+}
+
+.chips input:focus-visible + label {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}
+
+/* Draft suggestion cards. */
+.drafts {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.draft input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.draft label {
+  background: var(--paper);
+  border: 1px solid #c3cbc9;
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: block;
+  padding: 0.75rem;
+}
+
+.draft input:checked + label {
+  border-color: var(--teal);
+  box-shadow: inset 0 0 0 1px var(--teal);
+}
+
+.draft input:focus-visible + label {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.draft .shape {
+  color: var(--muted);
+  display: block;
+  font-size: 0.78rem;
+  margin-bottom: 0.25rem;
+}
+
+.counter {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: -0.5rem 0 0.75rem;
+  text-align: right;
+}
+
+.counter.over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------- status and states */
+
+.status {
+  border-radius: 10px;
+  font-size: 0.92rem;
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.status:empty {
+  display: none;
+}
+
+.status.error {
+  background: #fdf1ef;
+  border: 1px solid #e8c4bf;
+  color: #7f1b11;
+}
+
+.status.ok {
+  background: var(--teal-wash);
+  border: 1px solid #c6ded9;
+  color: #0a4a41;
+}
+
+.status.working {
+  background: #f1f3f2;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.empty {
+  color: var(--muted);
+  padding: 0.5rem 0;
+}
+
+.spinner {
+  animation: spin 0.9s linear infinite;
+  border: 2px solid #c6ded9;
+  border-radius: 50%;
+  border-top-color: var(--teal);
+  display: inline-block;
+  height: 14px;
+  margin-right: 0.45rem;
+  vertical-align: -2px;
+  width: 14px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .spinner {
+    animation: none;
+    border-top-color: #c6ded9;
+  }
+}
+
+.footnote {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.site-footer {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 auto;
+  max-width: 420px;
+  padding: 0 1rem 2rem;
+}
+
+/* ------------------------------------------------------------------- landing */
+
+.hero {
+  padding: 0.5rem 0 1rem;
+}
+
+.hero h1 {
+  font-size: 1.9rem;
+}
+
+.steps {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.steps li {
+  margin-bottom: 0.4rem;
+}
+
+/* --------------------------------------------------------------------- admin */
+
+.admin-wide {
+  max-width: 760px;
+}
+
+.qr-thumb {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  height: 92px;
+  width: 92px;
+}
+
+.biz {
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 0.85rem;
+  padding: 0.85rem 0;
+}
+
+.biz:first-of-type {
+  border-top: 0;
+}
+
+.biz-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.biz h3 {
+  overflow-wrap: anywhere;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.inline-actions button,
+.inline-actions a.button-link {
+  font-size: 0.88rem;
+  padding: 0.35rem 0.7rem;
+  width: auto;
+}
+
+a.button-link {
+  align-items: center;
+  background: var(--paper);
+  border: 1px solid #c3cbc9;
+  border-radius: 10px;
+  color: var(--ink);
+  display: inline-flex;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 44px;
+  text-decoration: none;
+}
+
+a.button-link:hover {
+  background: #eef1f0;
+}
+
+.mod-row {
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 0;
+}
+
+.mod-row:first-of-type {
+  border-top: 0;
+}
+
+.mod-row .who {
+  overflow-wrap: anywhere;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.tabs button {
+  width: auto;
+}
+
+.tabs button[aria-selected='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+@media (min-width: 560px) {
+  main {
+    max-width: 480px;
+  }
+
+  .row {
+    gap: 0.75rem;
+  }
+}
+
+/* A minor control inline in a footnote: smaller, but still a 44px target. */
+.footnote button {
+  font-size: 0.85rem;
+  margin-left: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  width: auto;
+}
+
+/* A checkbox with its label on one line, still a 44px target. */
+.check {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+  min-height: 44px;
+}
+
+.check input {
+  height: 20px;
+  margin: 0;
+  width: 20px;
+}
+
+.check label {
+  font-weight: 400;
+  margin: 0;
+}

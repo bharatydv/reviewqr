@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reviews · ReviewQR</title>
+    <meta name="description" content="Read the latest reviews for this business and leave one of your own." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Instrument+Sans:wght@400;600&display=swap"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/">ReviewQR</a>
+    </header>
+
+    <main>
+      <p id="load-status" class="status working" role="status" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>Loading this business.
+      </p>
+
+      <div id="not-found" class="card hidden">
+        <h1>We could not find that business</h1>
+        <p class="muted">
+          The QR code may be out of date, or the link may have a typo. Ask the business for a fresh
+          code, or <a href="/">start from the home page</a>.
+        </p>
+      </div>
+
+      <div id="profile" class="hidden">
+        <section class="card" aria-labelledby="biz-name">
+          <h1 id="biz-name"></h1>
+          <p class="meta" id="biz-meta"></p>
+          <p class="muted small" id="biz-description"></p>
+
+          <div class="summary">
+            <span class="average" id="avg"></span>
+            <span class="stars" id="avg-stars" aria-hidden="true"></span>
+            <span class="muted small" id="avg-count"></span>
+          </div>
+          <p class="sr-only" id="avg-sr"></p>
+
+          <div class="breakdown" id="breakdown"></div>
+        </section>
+
+        <section class="card" aria-labelledby="reviews-heading">
+          <h2 id="reviews-heading">Latest reviews</h2>
+          <p class="muted small" id="reviews-note"></p>
+          <ul class="review-list" id="reviews"></ul>
+          <p class="empty hidden" id="reviews-empty">No reviews yet. Be the first.</p>
+        </section>
+
+        <section class="card" aria-labelledby="write-heading">
+          <h2 id="write-heading">Write a review</h2>
+          <p id="status" class="status" role="status" aria-live="polite"></p>
+
+          <!-- 1. Verify your email -->
+          <form id="step-email" class="hidden" novalidate>
+            <p class="muted small">
+              We ask for your email once, so each person leaves one review. It is never shown with
+              your review.
+            </p>
+            <label for="email">Email address</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              autocomplete="email"
+              inputmode="email"
+              required
+            />
+            <label for="first-name">First name</label>
+            <input
+              type="text"
+              id="first-name"
+              name="firstName"
+              autocomplete="given-name"
+              maxlength="40"
+              required
+            />
+            <p class="hint">Shown with your review, for example "Maya".</p>
+            <div class="sr-only" aria-hidden="true">
+              <label for="company">Company</label>
+              <input type="text" id="company" name="company" tabindex="-1" autocomplete="off" />
+            </div>
+            <button type="submit" id="send-code">Email me a code</button>
+          </form>
+
+          <!-- 2. Enter the code -->
+          <form id="step-code" class="hidden" novalidate>
+            <p class="muted small" id="code-sent-to"></p>
+            <label for="code">6-digit code</label>
+            <input
+              type="text"
+              id="code"
+              name="code"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="6"
+              pattern="[0-9]*"
+              required
+            />
+            <p class="hint">The code expires in 10 minutes.</p>
+            <button type="submit" id="verify-code">Verify and continue</button>
+            <div class="row">
+              <button type="button" class="secondary" id="resend-code">Send a new code</button>
+              <button type="button" class="secondary" id="change-email">Change email</button>
+            </div>
+          </form>
+
+          <!-- Google One Tap, when the server has a client id configured.
+               Dismissing it is fine: the review goes ahead either way. -->
+          <div id="google-signin" class="hidden">
+            <p class="muted small" id="google-signin-note">
+              Continue with your Google account so this review is tied to you, or just start
+              writing below.
+            </p>
+            <div id="google-button"></div>
+          </div>
+
+          <!-- 3. Quick input -->
+          <form id="step-input" class="hidden" novalidate>
+            <fieldset>
+              <legend id="rating-legend">Your rating</legend>
+              <div class="rating-group" id="rating-new" role="radiogroup" aria-labelledby="rating-legend">
+                <input type="radio" name="rating" id="rating-new-1" value="1" />
+                <label for="rating-new-1" aria-label="1 star, poor">★</label>
+                <input type="radio" name="rating" id="rating-new-2" value="2" />
+                <label for="rating-new-2" aria-label="2 stars, not great">★</label>
+                <input type="radio" name="rating" id="rating-new-3" value="3" />
+                <label for="rating-new-3" aria-label="3 stars, mixed">★</label>
+                <input type="radio" name="rating" id="rating-new-4" value="4" />
+                <label for="rating-new-4" aria-label="4 stars, good">★</label>
+                <input type="radio" name="rating" id="rating-new-5" value="5" />
+                <label for="rating-new-5" aria-label="5 stars, excellent">★</label>
+              </div>
+              <p class="rating-caption" id="rating-new-caption" aria-live="polite"></p>
+            </fieldset>
+
+            <fieldset>
+              <legend>What stood out? Optional.</legend>
+              <div class="chips" id="chips"></div>
+            </fieldset>
+
+            <label for="note">Anything specific?</label>
+            <input type="text" id="note" name="note" maxlength="200" autocomplete="off" />
+            <p class="hint">Optional, one line. We only use what you type here.</p>
+
+            <div class="sr-only" aria-hidden="true">
+              <label for="company-2">Company</label>
+              <input type="text" id="company-2" name="company" tabindex="-1" autocomplete="off" />
+            </div>
+
+            <button type="submit" id="suggest">Suggest reviews</button>
+          </form>
+
+          <!-- 4. Pick a draft and edit it -->
+          <div id="step-drafts" class="hidden">
+            <h3>Pick a draft</h3>
+            <p class="muted small">Choose the one closest to what you mean, then edit it.</p>
+            <div class="drafts" id="drafts" role="radiogroup" aria-label="Suggested drafts"></div>
+
+            <label for="comment">Your review</label>
+            <textarea id="comment" maxlength="400" required></textarea>
+            <p class="counter" id="comment-counter" aria-live="polite"></p>
+
+            <div class="row">
+              <button type="button" class="secondary" id="regenerate">Regenerate</button>
+              <button type="button" id="post-review">Post review</button>
+            </div>
+            <p class="footnote">
+              Drafts are based only on what you told us. Edit them so they sound like you.
+            </p>
+          </div>
+
+          <!-- 5. Posted here. Offer to post the same words on Google. -->
+          <div id="step-google" class="hidden">
+            <p class="status ok">Thank you. Your review is live on this page.</p>
+            <h3>Post it on Google too?</h3>
+            <p class="muted small">
+              Copy your words and we will open Google's review box for this business. Paste it
+              there, choose your stars and post.
+            </p>
+            <label for="google-text">Your review</label>
+            <textarea id="google-text" readonly></textarea>
+            <p class="small" id="google-copied" role="status" aria-live="polite"></p>
+            <a
+              class="button-link"
+              id="google-link"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Copy and open Google</a
+            >
+            <div class="row">
+              <button type="button" class="secondary" id="google-done">Not now</button>
+            </div>
+          </div>
+
+          <!-- 6. Your review, once posted -->
+          <div id="step-mine" class="hidden">
+            <div class="mine">
+              <div class="review-head">
+                <span class="badge">Your review</span>
+                <span class="stars" id="mine-stars" aria-hidden="true"></span>
+                <span class="when" id="mine-when"></span>
+              </div>
+              <p class="review-body" id="mine-comment"></p>
+              <p class="muted small hidden" id="mine-hidden">
+                A moderator has hidden this review, so it is not on the public list at the moment.
+                You can still edit or delete it.
+              </p>
+              <!-- The business's answer, when there is one. Filled in by business.js. -->
+              <div id="mine-reply" class="hidden"></div>
+            </div>
+            <div class="row">
+              <button type="button" class="secondary" id="edit-review">Edit</button>
+              <button type="button" class="danger" id="delete-review">Delete</button>
+            </div>
+            <p class="footnote hidden" id="mine-google">
+              <a id="mine-google-link" href="#" target="_blank" rel="noopener noreferrer"
+                >Copy this and post it on Google</a
+              >
+              <span id="mine-google-copied"></span>
+            </p>
+          </div>
+
+          <!-- 7. Editing an existing review -->
+          <form id="step-edit" class="hidden" novalidate>
+            <fieldset>
+              <legend id="edit-rating-legend">Your rating</legend>
+              <div
+                class="rating-group"
+                id="rating-edit"
+                role="radiogroup"
+                aria-labelledby="edit-rating-legend"
+              >
+                <input type="radio" name="edit-rating" id="rating-edit-1" value="1" />
+                <label for="rating-edit-1" aria-label="1 star, poor">★</label>
+                <input type="radio" name="edit-rating" id="rating-edit-2" value="2" />
+                <label for="rating-edit-2" aria-label="2 stars, not great">★</label>
+                <input type="radio" name="edit-rating" id="rating-edit-3" value="3" />
+                <label for="rating-edit-3" aria-label="3 stars, mixed">★</label>
+                <input type="radio" name="edit-rating" id="rating-edit-4" value="4" />
+                <label for="rating-edit-4" aria-label="4 stars, good">★</label>
+                <input type="radio" name="edit-rating" id="rating-edit-5" value="5" />
+                <label for="rating-edit-5" aria-label="5 stars, excellent">★</label>
+              </div>
+              <p class="rating-caption" id="rating-edit-caption" aria-live="polite"></p>
+            </fieldset>
+            <p class="hint hidden" id="edit-reply-note">
+              The business has answered this review. Saving a change clears their answer, so they
+              can reply to what you say now.
+            </p>
+            <label for="edit-comment">Your review</label>
+            <textarea id="edit-comment" maxlength="400" required></textarea>
+            <p class="counter" id="edit-counter" aria-live="polite"></p>
+            <div class="row">
+              <button type="button" class="secondary" id="cancel-edit">Cancel</button>
+              <button type="submit" id="save-edit">Save changes</button>
+            </div>
+          </form>
+
+          <div id="signed-in-as" class="hidden">
+            <p class="footnote">
+              Signed in as <span id="signed-in-name"></span>.
+              <button type="button" class="secondary" id="sign-out">Sign out</button>
+            </p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <p>Reviews on this page were left by people who scanned this business's QR code.</p>
+    </footer>
+
+    <script src="/business.js"></script>
+  </body>
+</html>

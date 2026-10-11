@@ -1,0 +1,62 @@
+# Fly.io configuration for ReviewQR.
+#
+# Everything here is non-secret. Keys and passwords go in `fly secrets set`,
+# which keeps them out of this file and out of git. See the "On Fly.io" section
+# of the README for the full walkthrough.
+#
+# Change `app` to your own name, and BASE_URL to match it exactly: BASE_URL is
+# what every printed QR code encodes, so settle it before you print anything.
+
+app = 'reviewqr'
+primary_region = 'ams'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  NODE_ENV = 'production'
+  PORT = '3000'
+  # Must equal the hostname Fly serves this app on, scheme included.
+  BASE_URL = 'https://reviewqr.fly.dev'
+  # Fly puts a proxy in front of the app, so without this every request looks
+  # like it comes from the proxy and the per-IP rate limits apply to all
+  # customers at once.
+  TRUST_PROXY = '1'
+  MAX_VISIBLE_REVIEWS = '6'
+  ANTHROPIC_MODEL = 'claude-opus-5-5'
+
+# The SQLite file lives on a volume, so it survives a deploy and a restart.
+# The Dockerfile already defaults DB_PATH to /data/reviewqr.db.
+[mounts]
+  source = 'reviewqr_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # SQLite has a single writer, so this app runs as exactly one machine. Do not
+  # raise max_machines_running or scale the app to two: two machines would each
+  # get their own volume and their own, diverging database.
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  max_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    soft_limit = 200
+    hard_limit = 250
+
+# Fly's own check, on top of the Dockerfile HEALTHCHECK.
+[[http_service.checks]]
+  interval = '30s'
+  timeout = '5s'
+  grace_period = '10s'
+  method = 'GET'
+  path = '/healthz'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpus = 1

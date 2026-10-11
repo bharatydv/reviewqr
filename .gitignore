@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.production
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+npm-debug.log*
+.DS_Store
+reviewqr-deploy.tar.gz

@@ -1,0 +1,20 @@
+{
+  "name": "reviewqr",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Scan a QR code, read a business's reviews, and write one with AI-drafted help.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "nodemailer": "^10.1.0",
+    "qrcode": "^1.5.4"
+  }
+}

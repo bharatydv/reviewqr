@@ -1,0 +1,30 @@
+# Caddy in front of ReviewQR.
+#
+# Caddy obtains and renews a free Let's Encrypt certificate on its own, which
+# is the whole reason it is here: the app needs https for Google One Tap, for
+# the clipboard API and for its own Secure cookies.
+#
+# SITE_ADDRESS comes from .env (see compose.yaml). A certificate can only be
+# issued for a hostname, never a bare IP address, so it has to be a real name
+# pointed at this machine.
+
+# No global options block on purpose. An `email` directive here would be a
+# parse error whenever the value is empty, and Caddy renews certificates by
+# itself, so an address only buys expiry reminders. To get those, add:
+#
+#   {
+#       email you@example.com
+#   }
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# The app sets its own security headers, including CSP and HSTS, so Caddy
+	# passes responses through rather than adding its own.
+	reverse_proxy app:3000
+
+	log {
+		output stdout
+		format console
+	}
+}

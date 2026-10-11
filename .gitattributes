@@ -1,0 +1,21 @@
+# Line endings are not cosmetic in this repo.
+#
+# deploy/gcp-startup.sh is handed to the GCP VM as instance metadata and run by
+# Linux, so a CRLF would leave it with a "#!/bin/bash\r" shebang and no working
+# interpreter. The Dockerfile and the Caddyfile are read inside containers for
+# the same reason. So: LF everywhere, whatever the checkout platform does.
+* text=auto eol=lf
+
+*.sh      text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.toml    text eol=lf
+Dockerfile text eol=lf
+Caddyfile text eol=lf
+
+# PowerShell is happy with either, and CRLF is what Windows editors expect.
+*.ps1     text eol=crlf
+
+*.png binary
+*.svg text eol=lf
+*.db  binary

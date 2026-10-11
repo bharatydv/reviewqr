@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin · ReviewQR</title>
+    <meta name="description" content="Create businesses, print QR codes and moderate reviews." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Instrument+Sans:wght@400;600&display=swap"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/">ReviewQR</a>
+      <span class="tag">Admin</span>
+    </header>
+
+    <main class="admin-wide">
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+
+      <form id="sign-in" class="card hidden" novalidate>
+        <h1>Admin sign in</h1>
+        <p class="muted small">
+          Use the ADMIN_TOKEN from the server's environment. It is kept in this tab only.
+        </p>
+        <label for="password">Admin password</label>
+        <input type="password" id="password" autocomplete="current-password" required />
+        <button type="submit" id="sign-in-button">Sign in</button>
+      </form>
+
+      <div id="console" class="hidden">
+        <div class="tabs" role="tablist" aria-label="Admin sections">
+          <button type="button" class="secondary" id="tab-businesses" role="tab" aria-selected="true">
+            Businesses
+          </button>
+          <button type="button" class="secondary" id="tab-reviews" role="tab" aria-selected="false">
+            Reviews
+          </button>
+          <button type="button" class="secondary" id="tab-people" role="tab" aria-selected="false">
+            People
+          </button>
+          <button type="button" class="secondary" id="sign-out">Sign out</button>
+        </div>
+
+        <section id="panel-businesses" role="tabpanel" aria-labelledby="tab-businesses">
+          <form id="create-business" class="card" novalidate>
+            <h2>Add a business</h2>
+            <label for="name">Name</label>
+            <input type="text" id="name" maxlength="80" required />
+            <label for="category">Category</label>
+            <input type="text" id="category" maxlength="200" />
+            <label for="address">Address</label>
+            <input type="text" id="address" maxlength="200" />
+            <label for="description">Description</label>
+            <input type="text" id="description" maxlength="500" />
+            <label for="topics">Topic chips</label>
+            <input type="text" id="topics" maxlength="220" />
+            <p class="hint">
+              Comma separated, up to 8. Leave empty for Service, Food, Price, Cleanliness, Staff,
+              Atmosphere. For a services business try: Service, Communication, Delivery time,
+              Expertise, Value.
+            </p>
+            <label for="google-review-url">Google review link</label>
+            <input type="text" id="google-review-url" maxlength="500" />
+            <p class="hint">
+              Optional. Paste the "Ask for reviews" short link from Google Business Profile, a
+              Google Maps link, or the place id. Customers are offered a one-tap "post this on
+              Google" step after they review here.
+            </p>
+            <div class="check">
+              <input type="checkbox" id="require-email" />
+              <label for="require-email">Ask reviewers to verify an email first</label>
+            </div>
+            <p class="hint">
+              Off by default. Customers review with nothing asked of them, and one device counts as
+              one person. Turn it on only if you need verified reviewers and can accept that most
+              people give up at the email step.
+            </p>
+            <div class="check">
+              <input type="checkbox" id="ai-drafts" checked />
+              <label for="ai-drafts">Offer AI-written drafts</label>
+            </div>
+            <p class="hint">
+              On by default. Turn it off and this business's customers get template drafts instead,
+              and the model is never called for them. Needs no key either way.
+            </p>
+            <div class="check">
+              <input type="checkbox" id="google-signin" checked />
+              <label for="google-signin">Offer Google sign-in</label>
+            </div>
+            <p class="hint">
+              On by default, and only ever visible when the server has a GOOGLE_CLIENT_ID. Turn it
+              off and this business's customers are never shown the Google prompt.
+            </p>
+            <p class="hint">
+              The web address is generated from the name, and never changes afterwards, so printed
+              QR codes keep working.
+            </p>
+            <button type="submit" id="create-button">Create business</button>
+          </form>
+
+          <section class="card" aria-labelledby="list-heading">
+            <h2 id="list-heading">Businesses</h2>
+            <div id="business-list"></div>
+            <p class="empty hidden" id="business-empty">No businesses yet. Add the first one above.</p>
+          </section>
+        </section>
+
+        <section id="panel-reviews" class="hidden" role="tabpanel" aria-labelledby="tab-reviews">
+          <section class="card" aria-labelledby="mod-heading">
+            <h2 id="mod-heading">Moderate reviews</h2>
+            <p class="muted small">
+              Reviewer emails are shown here only. They are never part of a public response. A
+              reply, on the other hand, is public: it sits under the review on the business page.
+            </p>
+            <div id="review-list"></div>
+            <p class="empty hidden" id="review-empty">No reviews yet.</p>
+          </section>
+        </section>
+
+        <section id="panel-people" class="hidden" role="tabpanel" aria-labelledby="tab-people">
+          <section class="card" aria-labelledby="people-heading">
+            <h2 id="people-heading">People</h2>
+            <p class="muted small">
+              Suspending someone ends their session and stops them signing in or posting.
+            </p>
+            <div id="people-list"></div>
+            <p class="empty hidden" id="people-empty">Nobody has signed in yet.</p>
+          </section>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <p>Print a QR code at its real size and keep the white border clear.</p>
+    </footer>
+
+    <script src="/admin.js"></script>
+  </body>
+</html>
