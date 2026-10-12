@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS businesses (
   owner_id    INTEGER REFERENCES owners (id) ON DELETE SET NULL,
   created_at  TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_businesses_owner ON businesses (owner_id);
+-- The index on owner_id is NOT here. On an existing database CREATE TABLE IF
+-- NOT EXISTS does nothing, so the column does not appear until migrate() adds
+-- it below - and an index over a column that is not there yet is an error that
+-- takes the whole process down on startup. It is created after the migration.
 
 -- A reviewer. Normally just a device: the browser that scanned the code, known
 -- by the hash of a cookie it was given. email is only set for the businesses
@@ -225,8 +228,11 @@ export function migrate(db) {
     // Existing businesses keep working and stay visible to a platform admin
     // until somebody claims them; printed QR codes are untouched either way.
     db.exec('ALTER TABLE businesses ADD COLUMN owner_id INTEGER REFERENCES owners (id) ON DELETE SET NULL');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_businesses_owner ON businesses (owner_id)');
   }
+  // Unconditional, and after the ALTER: a fresh database has the column from
+  // the schema and an upgraded one has just gained it, so this is the one place
+  // that can index it for both.
+  db.exec('CREATE INDEX IF NOT EXISTS idx_businesses_owner ON businesses (owner_id)');
 
   const reviewColumns = new Set(
     db.prepare('PRAGMA table_info(reviews)').all().map((row) => row.name),

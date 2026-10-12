@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { buildConfig } from './lib/env.js';
 import { openDb, seed, migrate, setBusinessSwitches, upsertUser, topicsFor, nowIso } from './db.js';
@@ -2199,6 +2203,57 @@ test('an older database is migrated rather than broken', async () => {
   assert.equal(row.google_review_url, '');
   assert.deepEqual(topicsFor(row), ['Service', 'Food', 'Price', 'Cleanliness', 'Staff', 'Atmosphere']);
   db.close();
+});
+
+test('a database from before owner accounts is opened by the whole openDb path', async () => {
+  // The test above calls migrate() directly, which is not where an upgrade
+  // actually breaks: openDb runs the schema first, and a schema that indexes a
+  // column only the migration adds throws "no such column" before migrate() is
+  // ever reached. That took production down, and nothing in memory reproduces
+  // it - it needs a real file that already holds the older tables.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reviewqr-migrate-'));
+  const file = path.join(dir, 'old.db');
+  try {
+    // Exactly the businesses table as it shipped before accounts existed.
+    const old = new DatabaseSync(file);
+    old.exec(`CREATE TABLE businesses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      topics TEXT NOT NULL DEFAULT '',
+      google_review_url TEXT NOT NULL DEFAULT '',
+      require_email INTEGER NOT NULL DEFAULT 0 CHECK (require_email IN (0, 1)),
+      ai_drafts INTEGER NOT NULL DEFAULT 1 CHECK (ai_drafts IN (0, 1)),
+      google_signin INTEGER NOT NULL DEFAULT 1 CHECK (google_signin IN (0, 1))
+    )`);
+    old.prepare('INSERT INTO businesses (slug, name, created_at) VALUES (?, ?, ?)')
+      .run('old-shop', 'Old Shop', nowIso());
+    old.close();
+
+    const db = openDb(file);
+    const row = db.prepare('SELECT * FROM businesses WHERE slug = ?').get('old-shop');
+    // The business survives, unclaimed, and the index it needs exists.
+    assert.equal(row.name, 'Old Shop');
+    assert.equal(row.owner_id, null);
+    const index = db
+      .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'index' AND name = ?")
+      .get('idx_businesses_owner');
+    assert.ok(index, 'idx_businesses_owner was never created');
+    // And an account can be created against it, which is the first thing that
+    // happens on an upgraded install.
+    db.prepare(
+      'INSERT INTO owners (email, name, password_hash, is_admin, created_at) VALUES (?, ?, ?, 1, ?)',
+    ).run('owner@example.com', 'Owner', 'scrypt$00$00', nowIso());
+    db.prepare('UPDATE businesses SET owner_id = 1 WHERE owner_id IS NULL').run();
+    assert.equal(db.prepare('SELECT owner_id FROM businesses WHERE slug = ?').get('old-shop').owner_id, 1);
+    db.close();
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // ------------------------------------------------------- Google One Tap
