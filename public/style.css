@@ -1,21 +1,148 @@
-/* ReviewQR - calm, mobile first, one teal accent and amber stars. */
+/* ReviewQR - calm, mobile first, one brand accent and amber stars.
+ *
+ * Colour lives in two layers. The semantic tokens below say what a colour is
+ * FOR (--surface, --text-muted, --brand), and the dark block further down
+ * redefines only those. Everything after this point refers to tokens and never
+ * to a raw hex, which is what makes one dark block enough - and what makes
+ * rebranding a matter of editing the brand tokens and nothing else.
+ *
+ * The --ink / --paper / --teal names are kept as aliases so the rest of the
+ * file reads as it always did. */
 
 :root {
-  --ink: #101418;
-  --ink-soft: #2b333a;
-  --mist: #f3f5f4;
-  --paper: #ffffff;
-  --line: #dfe4e3;
-  --muted: #55606a;
-  --teal: #0f7a6c;
-  --teal-dark: #0a5a4f;
-  --teal-wash: #e7f2f0;
-  --amber: #b07708;
+  color-scheme: light dark;
+
+  /* surfaces */
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --surface-2: var(--surface-2);
+  --header-bg: #101418;
+  --header-tag: var(--header-tag);
+
+  /* text */
+  --text: #101418;
+  --text-soft: #2b333a;
+  --text-muted: #55606a;
+  --placeholder: var(--placeholder);
+
+  /* lines */
+  --border: #dfe4e3;
+  --border-strong: var(--border-strong);
+
+  /* brand - the three values to change when rebranding */
+  --brand: #0f7a6c;
+  --brand-strong: #0a5a4f;
+  --brand-wash: #e7f2f0;
+  --brand-edge: var(--brand-edge);
+  --on-brand: #ffffff;
+  --link: var(--brand-strong);
+
+  /* stars */
+  --star: #b07708;
+  --star-off: var(--star-off);
+  --bar-track: var(--bar-track);
+
+  /* feedback */
   --danger: #a32316;
+  --danger-wash: var(--danger-wash);
+  --danger-edge: var(--danger-edge);
+  --danger-text: var(--danger-text);
+  --ok-text: var(--ok-text);
+
   --radius: 12px;
   --shadow: 0 1px 2px rgba(16, 20, 24, 0.06);
+  --shadow-lift: 0 4px 16px rgba(16, 20, 24, 0.1);
   --heading: 'Bricolage Grotesque', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   --body: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+
+  /* legacy aliases, so the rest of the file is unchanged */
+  --ink: var(--text);
+  --ink-soft: var(--text-soft);
+  --mist: var(--bg);
+  --paper: var(--surface);
+  --line: var(--border);
+  --muted: var(--text-muted);
+  --teal: var(--brand);
+  --teal-dark: var(--brand-strong);
+  --teal-wash: var(--brand-wash);
+  --amber: var(--star);
+}
+
+/* Dark mode. Follows the system unless the page carries data-theme, which the
+ * header toggle sets. Teal is lifted and desaturated: the light teal is only
+ * 2.1:1 against a dark surface, which fails at any text size. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0e1214;
+    --surface: #161b1e;
+    --surface-2: #1e2529;
+    --header-bg: #0a0d0f;
+    --header-tag: #8a9794;
+
+    --text: #e8edec;
+    --text-soft: #c3ccca;
+    --text-muted: #9aa6a4;
+    --placeholder: #7d8a88;
+
+    --border: #2a3338;
+    --border-strong: #3a454a;
+
+    --brand: #2bbfa8;
+    --brand-strong: #4fd6c0;
+    --brand-wash: #10302c;
+    --brand-edge: #1d4a43;
+    --on-brand: #06231f;
+    --link: var(--brand-strong);
+
+    --star: #e0a93a;
+    --star-off: #4a5357;
+    --bar-track: #262e32;
+
+    --danger: #ff9385;
+    --danger-wash: #2a1512;
+    --danger-edge: #5a2a22;
+    --danger-text: #ffb3a7;
+    --ok-text: #7fe0cd;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-lift: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0e1214;
+  --surface: #161b1e;
+  --surface-2: #1e2529;
+  --header-bg: #0a0d0f;
+  --header-tag: #8a9794;
+
+  --text: #e8edec;
+  --text-soft: #c3ccca;
+  --text-muted: #9aa6a4;
+  --placeholder: #7d8a88;
+
+  --border: #2a3338;
+  --border-strong: #3a454a;
+
+  --brand: #2bbfa8;
+  --brand-strong: #4fd6c0;
+  --brand-wash: #10302c;
+  --brand-edge: #1d4a43;
+  --on-brand: #06231f;
+  --link: var(--brand-strong);
+
+  --star: #e0a93a;
+  --star-off: #4a5357;
+  --bar-track: #262e32;
+
+  --danger: #ff9385;
+  --danger-wash: #2a1512;
+  --danger-edge: #5a2a22;
+  --danger-text: #ffb3a7;
+  --ok-text: #7fe0cd;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lift: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 *,
@@ -64,7 +191,7 @@ p {
 }
 
 a {
-  color: var(--teal-dark);
+  color: var(--link);
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
 }
@@ -77,7 +204,7 @@ a {
 }
 
 .site-header {
-  background: var(--ink);
+  background: var(--header-bg);
   color: var(--paper);
   padding: 0.85rem 1rem;
 }
@@ -91,7 +218,7 @@ a {
 }
 
 .site-header .tag {
-  color: #b9c3c1;
+  color: var(--header-tag);
   font-size: 0.8rem;
   margin-left: 0.5rem;
 }
@@ -162,7 +289,7 @@ main {
 }
 
 .stars .off {
-  color: #c9cfce;
+  color: var(--star-off);
 }
 
 .breakdown {
@@ -184,7 +311,7 @@ main {
 }
 
 .bar {
-  background: #eceeed;
+  background: var(--bar-track);
   border-radius: 999px;
   height: 8px;
   overflow: hidden;
@@ -243,8 +370,8 @@ main {
 }
 
 .mine {
-  background: var(--teal-wash);
-  border: 1px solid #c6ded9;
+  background: var(--brand-wash);
+  border: 1px solid var(--brand-edge);
   border-radius: var(--radius);
   padding: 0.85rem;
 }
@@ -265,9 +392,9 @@ main {
 }
 
 .badge {
-  background: var(--teal);
+  background: var(--brand);
   border-radius: 999px;
-  color: var(--paper);
+  color: var(--on-brand);
   font-size: 0.72rem;
   letter-spacing: 0.02em;
   padding: 0.1rem 0.5rem;
@@ -298,7 +425,7 @@ input[type='email'],
 input[type='password'],
 textarea {
   background: var(--paper);
-  border: 1px solid #c3cbc9;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   color: var(--ink);
   font: inherit;
@@ -316,7 +443,7 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: #7b858d;
+  color: var(--placeholder);
 }
 
 .hint {
@@ -327,10 +454,10 @@ textarea::placeholder {
 
 button {
   align-items: center;
-  background: var(--teal);
-  border: 1px solid var(--teal);
+  background: var(--brand);
+  border: 1px solid var(--brand);
   border-radius: 10px;
-  color: var(--paper);
+  color: var(--on-brand);
   cursor: pointer;
   display: inline-flex;
   font: inherit;
@@ -353,22 +480,22 @@ button[disabled] {
 
 button.secondary {
   background: var(--paper);
-  border-color: #c3cbc9;
+  border-color: var(--border-strong);
   color: var(--ink);
 }
 
 button.secondary:hover {
-  background: #eef1f0;
+  background: var(--surface-2);
 }
 
 button.danger {
   background: var(--paper);
-  border-color: #e0b7b2;
+  border-color: var(--danger-edge);
   color: var(--danger);
 }
 
 button.danger:hover {
-  background: #fdf2f1;
+  background: var(--danger-wash);
 }
 
 .row {
@@ -396,7 +523,7 @@ button.danger:hover {
   align-items: center;
   border: 1px solid transparent;
   border-radius: 10px;
-  color: #c0c7c5;
+  color: var(--star-off);
   cursor: pointer;
   display: flex;
   font-size: 1.75rem;
@@ -443,7 +570,7 @@ button.danger:hover {
 .chips label {
   align-items: center;
   background: var(--paper);
-  border: 1px solid #c3cbc9;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   cursor: pointer;
   display: inline-flex;
@@ -478,7 +605,7 @@ button.danger:hover {
 
 .draft label {
   background: var(--paper);
-  border: 1px solid #c3cbc9;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   cursor: pointer;
   display: block;
@@ -528,19 +655,19 @@ button.danger:hover {
 }
 
 .status.error {
-  background: #fdf1ef;
-  border: 1px solid #e8c4bf;
-  color: #7f1b11;
+  background: var(--danger-wash);
+  border: 1px solid var(--danger-edge);
+  color: var(--danger-text);
 }
 
 .status.ok {
   background: var(--teal-wash);
-  border: 1px solid #c6ded9;
-  color: #0a4a41;
+  border: 1px solid var(--brand-edge);
+  color: var(--ok-text);
 }
 
 .status.working {
-  background: #f1f3f2;
+  background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--ink-soft);
 }
@@ -552,7 +679,7 @@ button.danger:hover {
 
 .spinner {
   animation: spin 0.9s linear infinite;
-  border: 2px solid #c6ded9;
+  border: 2px solid var(--brand-edge);
   border-radius: 50%;
   border-top-color: var(--teal);
   display: inline-block;
@@ -577,7 +704,7 @@ button.danger:hover {
 
   .spinner {
     animation: none;
-    border-top-color: #c6ded9;
+    border-top-color: var(--brand-edge);
   }
 }
 
@@ -665,7 +792,7 @@ button.danger:hover {
 a.button-link {
   align-items: center;
   background: var(--paper);
-  border: 1px solid #c3cbc9;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   color: var(--ink);
   display: inline-flex;
@@ -676,7 +803,7 @@ a.button-link {
 }
 
 a.button-link:hover {
-  background: #eef1f0;
+  background: var(--surface-2);
 }
 
 .mod-row {
@@ -703,9 +830,9 @@ a.button-link:hover {
 }
 
 .tabs button[aria-selected='true'] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-brand);
 }
 
 @media (min-width: 560px) {
@@ -744,4 +871,229 @@ a.button-link:hover {
 .check label {
   font-weight: 400;
   margin: 0;
+}
+
+/* ------------------------------------------------------------- theme toggle */
+
+.site-header {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.site-header .brand-mark {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.45rem;
+}
+
+.site-header .spacer {
+  flex: 1;
+}
+
+/* A quiet control in a dark bar: readable, but never competing with the name. */
+.theme-toggle {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  color: var(--paper);
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  gap: 0.35rem;
+  min-height: 36px;
+  padding: 0.25rem 0.7rem;
+  width: auto;
+}
+
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.theme-toggle .icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------- toasts */
+
+/* Bottom on phones so it never covers the thing just tapped; a corner on
+ * desktop. aria-live is on the container, so a toast is announced too. */
+.toasts {
+  bottom: 0;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  left: 0;
+  padding: 1rem;
+  pointer-events: none;
+  position: fixed;
+  right: 0;
+  z-index: 50;
+}
+
+.toast {
+  align-items: flex-start;
+  animation: toast-in 0.22s ease-out;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--brand);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lift);
+  color: var(--text);
+  display: flex;
+  font-size: 0.92rem;
+  gap: 0.5rem;
+  max-width: 420px;
+  padding: 0.7rem 0.85rem;
+  pointer-events: auto;
+  width: 100%;
+}
+
+.toast.error {
+  border-left-color: var(--danger);
+}
+
+.toast.leaving {
+  animation: toast-out 0.18s ease-in forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ---------------------------------------------------------------- skeletons */
+
+/* Shown while the first fetch is in flight, sized like the content it stands
+ * in for so the page does not jump when the real thing arrives. */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--bg) 37%, var(--surface-2) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 6px;
+  height: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton.title {
+  height: 1.6rem;
+  width: 60%;
+}
+
+.skeleton.line-short {
+  width: 40%;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -400% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+
+  .toast {
+    animation: none;
+  }
+}
+
+/* -------------------------------------------------------------- wider screens */
+
+/* The customer flow stays a single readable column - it is a form, and a wide
+ * form is a worse form. Desktop gets breathing room, not more columns. */
+@media (min-width: 900px) {
+  main {
+    max-width: 560px;
+    padding-top: 2rem;
+  }
+
+  .card {
+    padding: 1.25rem;
+  }
+
+  .toasts {
+    bottom: auto;
+    justify-items: end;
+    left: auto;
+    right: 0;
+    top: 0;
+  }
+}
+
+/* The admin console is the opposite case: it is a list of things to scan, and
+ * it genuinely benefits from width. */
+@media (min-width: 1000px) {
+  main.admin-wide {
+    max-width: 1080px;
+  }
+
+  .admin-wide .biz {
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+
+  .admin-wide .qr-thumb {
+    height: 120px;
+    width: 120px;
+  }
+
+  .admin-wide .inline-actions {
+    margin-top: 0.75rem;
+  }
+}
+
+/* The landing page is a marketing page, so it lays out as one. */
+@media (min-width: 820px) {
+  main.landing {
+    max-width: 960px;
+  }
+
+  .landing .hero {
+    padding: 2.5rem 0 2rem;
+    text-align: center;
+  }
+
+  .landing .hero h1 {
+    font-size: 2.8rem;
+    margin: 0 auto 0.5rem;
+    max-width: 18ch;
+  }
+
+  .landing .hero p {
+    margin: 0 auto;
+    max-width: 56ch;
+  }
+
+  .landing .card-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .landing .card-grid .card {
+    margin-bottom: 0;
+  }
+}
+
+/* A card that is a link to somewhere: lifts slightly, so it reads as one. */
+.card.interactive {
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.card.interactive:hover {
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
 }

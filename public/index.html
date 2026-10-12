@@ -15,50 +15,67 @@
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Instrument+Sans:wght@400;600&display=swap"
     />
     <link rel="stylesheet" href="/style.css" />
+    <script src="/ui.js"></script>
   </head>
   <body>
     <header class="site-header">
       <a href="/">ReviewQR</a>
       <span class="tag">Reviews from people who were actually there</span>
+      <span class="spacer"></span>
+      <button type="button" class="theme-toggle" data-theme-toggle></button>
     </header>
 
-    <main>
+    <main class="landing">
       <div class="hero">
         <h1>One QR code. One review per customer.</h1>
         <p class="muted">
-          Put the code on the counter, the receipt or the table. Customers scan it, see your latest
-          reviews, verify their email once and leave one review.
+          Put the code on the counter, the receipt or the table. Customers scan it, read your
+          latest reviews, and leave one of their own - helped by drafts written from exactly what
+          they told you, and nothing else.
         </p>
+        <p><a class="button-link" href="/admin">Open the admin console</a></p>
       </div>
+
+      <section class="card-grid" aria-label="What you get">
+        <div class="card">
+          <h2>A code per venue</h2>
+          <p class="muted small">
+            Every business gets its own page and its own QR code, as PNG or print-ready SVG. The
+            address never changes when you edit the business, so a printed code keeps working.
+          </p>
+        </div>
+        <div class="card">
+          <h2>One review per person</h2>
+          <p class="muted small">
+            Verify by email or Google sign-in, both optional per business. Either way a customer
+            leaves one review, and the same person cannot review twice from a second phone.
+          </p>
+        </div>
+        <div class="card">
+          <h2>Drafts, not inventions</h2>
+          <p class="muted small">
+            The customer picks a rating and taps a few topics. Drafts are built from those details
+            only - no invented prices, places or dates - and every one is editable before posting.
+          </p>
+        </div>
+      </section>
 
       <section class="card" aria-labelledby="how">
         <h2 id="how">How it works</h2>
         <ol class="steps">
           <li>A customer scans your code and lands on your profile.</li>
-          <li>They verify their email with a 6-digit code. Returning customers skip this.</li>
+          <li>They verify once, if you have asked for it. Returning customers skip this.</li>
           <li>They pick a star rating, tap a few topics and add an optional note.</li>
-          <li>We suggest a handful of drafts from exactly those details. They pick one and edit it.</li>
-          <li>They post it. One review per person, per business.</li>
+          <li>They choose one of the suggested drafts, edit it, and post it.</li>
+          <li>You answer it from the admin console, and the answer shows under the review.</li>
         </ol>
-        <p class="footnote">
-          Drafts are built only from what the customer tells us. Nothing is invented, and every
-          draft is editable before it is posted.
-        </p>
-      </section>
-
-      <section class="card" aria-labelledby="try">
-        <h2 id="try">Try it</h2>
-        <p class="muted small">
-          The demo business below ships with the app, so you can walk the whole flow.
-        </p>
-        <p><a class="button-link" href="/b/blue-door-cafe">Open the Blue Door Café profile</a></p>
       </section>
 
       <section class="card" aria-labelledby="owner">
         <h2 id="owner">Run a business?</h2>
         <p class="muted small">
-          The admin console creates businesses, prints their QR codes and moderates reviews. You
-          will need the admin password from the server's environment.
+          Create it in the admin console, print its code, and start collecting. You will need the
+          admin password from the server's environment.
         </p>
         <p><a class="button-link" href="/admin">Open the admin console</a></p>
       </section>
