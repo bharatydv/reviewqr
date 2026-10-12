@@ -833,6 +833,11 @@
           // With a Google link set up, offer to post the same words there too.
           if (googleUrl()) {
             el('google-text').value = state.data.me.review.comment;
+            // Name the rating they just gave, so Google gets the same one. We
+            // cannot select it for them: those stars are on Google's page.
+            var stars = state.data.me.review.rating;
+            el('google-stars-hint').textContent =
+              'Tap ' + stars + ' star' + (stars === 1 ? '' : 's') + ' on Google, then tap Post.';
             el('google-link').href = googleUrl();
             el('google-copied').textContent = '';
             clearStatus();

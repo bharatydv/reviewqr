@@ -181,10 +181,15 @@
           <div id="step-google" class="hidden">
             <p class="status ok">Thank you. Your review is live on this page.</p>
             <h3>Post it on Google too?</h3>
-            <p class="muted small">
-              Copy your words and we will open Google's review box for this business. Paste it
-              there, choose your stars and post.
-            </p>
+            <!-- Google's review box is on google.com, so nothing here can fill it in:
+                 same-origin rules stop one page writing into another's fields, and the
+                 review link takes no rating or text parameter. The most we can do is put
+                 the words on the clipboard and name the taps that are left. -->
+            <ol class="muted small" id="google-steps">
+              <li>Tap the button below. Your words go on the clipboard.</li>
+              <li>Tap Google's review box, then tap <strong>Paste</strong> above the keyboard. If you do not see it, press and hold the box instead.</li>
+              <li id="google-stars-hint">Choose your stars, then tap <strong>Post</strong>.</li>
+            </ol>
             <label for="google-text">Your review</label>
             <textarea id="google-text" readonly></textarea>
             <p class="small" id="google-copied" role="status" aria-live="polite"></p>

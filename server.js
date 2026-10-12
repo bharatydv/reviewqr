@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import QRCode from 'qrcode';
@@ -199,6 +200,49 @@ function businessStats(db, businessId) {
 }
 
 // ----------------------------------------------------------------- the app
+
+// ------------------------------------------- per-business page metadata
+
+// The customer page is one static file, so every business would otherwise
+// share a single title. WhatsApp, Facebook and iMessage never run the
+// script that fills the name in, so a link pasted into a chat has to carry
+// the name in the HTML itself. Read once: the file only changes on deploy.
+const BUSINESS_HTML = readFileSync(path.join(PUBLIC_DIR, 'business.html'), 'utf8');
+const BUSINESS_META = [
+  '    <title>Reviews \u00b7 ReviewQR</title>',
+  '    <meta name="description" content="Read the latest reviews for this business and leave one of your own." />',
+].join('\n');
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Name, category and score in the <head>, so a link shared in a chat
+// previews as the business rather than as the app.
+function businessPage(db, business, baseUrl) {
+  const stats = businessStats(db, business.id);
+  const title = `${business.name} \u2014 Reviews`;
+  const score = stats.count
+    ? `${stats.average} stars from ${stats.count} review${stats.count === 1 ? '' : 's'}`
+    : 'Be the first to leave a review';
+  const description = [business.category, score].filter(Boolean).join(' \u00b7 ');
+  const url = `${baseUrl}/b/${business.slug}`;
+  const block = [
+    `    <title>${escapeHtml(title)}</title>`,
+    `    <meta name="description" content="${escapeHtml(description)}" />`,
+    '    <meta property="og:type" content="website" />',
+    '    <meta property="og:site_name" content="ReviewQR" />',
+    `    <meta property="og:title" content="${escapeHtml(title)}" />`,
+    `    <meta property="og:description" content="${escapeHtml(description)}" />`,
+    `    <meta property="og:url" content="${escapeHtml(url)}" />`,
+    '    <meta name="twitter:card" content="summary" />',
+  ].join('\n');
+  return BUSINESS_HTML.replace(BUSINESS_META, block);
+}
 
 export function createApp({ config, db, mailer, suggester, googleVerifier = null, logger = console } = {}) {
   const app = express();
@@ -1078,11 +1122,14 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
   app.get('/admin', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'admin.html')));
   app.get('/b/:slug', (req, res) => {
     const business = db
-      .prepare('SELECT 1 FROM businesses WHERE slug = ?')
+      .prepare('SELECT * FROM businesses WHERE slug = ?')
       .get(clean(req.params.slug, 80).toLowerCase());
     // The page renders its own "not found" state; the status code is for
     // crawlers and link checkers.
-    res.status(business ? 200 : 404).sendFile(path.join(PUBLIC_DIR, 'business.html'));
+    if (!business) {
+      return res.status(404).sendFile(path.join(PUBLIC_DIR, 'business.html'));
+    }
+    return res.type('html').send(businessPage(db, business, config.baseUrl));
   });
 
   // "no-cache" means revalidate, not "do not store": the browser still keeps a
