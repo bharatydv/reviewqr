@@ -1192,7 +1192,8 @@ if (isMain()) {
   }
 
   const db = openDb(config.dbPath);
-  seed(db);
+  // Off in production: see config.seedDemo.
+  if (config.seedDemo) seed(db);
   const mailer = createMailer(config);
   const suggester = createSuggester({ config });
   const googleVerifier = config.googleClientId
