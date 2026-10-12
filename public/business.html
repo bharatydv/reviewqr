@@ -22,9 +22,19 @@
     </header>
 
     <main>
-      <p id="load-status" class="status working" role="status" aria-live="polite">
-        <span class="spinner" aria-hidden="true"></span>Loading this business.
-      </p>
+      <!-- A skeleton rather than a spinner: it is shaped like the profile that
+           replaces it, so the page does not jump when the data lands. The text
+           is kept for screen readers, which cannot see a shimmer. On failure
+           business.js resets this element's class and text, turning it into an
+           ordinary error box. -->
+      <div id="load-status" class="card" role="status" aria-live="polite">
+        <span class="sr-only">Loading this business.</span>
+        <div class="skeleton title" aria-hidden="true"></div>
+        <div class="skeleton line-short" aria-hidden="true"></div>
+        <div class="skeleton" aria-hidden="true"></div>
+        <div class="skeleton" aria-hidden="true"></div>
+        <div class="skeleton line-short" aria-hidden="true"></div>
+      </div>
 
       <div id="not-found" class="card hidden">
         <h1>We could not find that business</h1>

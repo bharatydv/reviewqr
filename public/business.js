@@ -129,6 +129,10 @@
 
   function status(kind, message, busy) {
     var node = el('status');
+    // Errors also toast, so one that happens below the fold is still seen.
+    // Successes do not: on this page they are the step itself changing, which
+    // is already obvious, and a toast on top would be noise.
+    if (kind === 'error' && message && !busy && window.toast) window.toast(message, 'error');
     node.className = 'status' + (kind ? ' ' + kind : '');
     node.textContent = '';
     if (busy) {

@@ -10,10 +10,22 @@
     return document.getElementById(id);
   };
 
+  // Confirmations go to a toast: the inline bar lives at the top of the page,
+  // and by the time you have scrolled to the tenth business and deleted it,
+  // a message up there is off screen and may as well not exist. Errors do
+  // both - a toast to be noticed, and the inline bar so it is still readable
+  // after the toast has gone.
   function status(kind, message) {
     var node = el('status');
+    if (kind === 'ok' && message && window.toast) {
+      node.className = 'status';
+      node.textContent = '';
+      window.toast(message);
+      return;
+    }
     node.className = 'status' + (kind ? ' ' + kind : '');
     node.textContent = message || '';
+    if (kind === 'error' && message && window.toast) window.toast(message, 'error');
   }
 
   function api(path, options) {
@@ -208,13 +220,83 @@
 
   // -------------------------------------------------------------- businesses
 
+  // The whole list is fetched once and filtered here rather than on the server.
+  // At this size a round trip per keystroke would be slower and no more
+  // correct; if this ever holds thousands of businesses, this is the piece to
+  // move server side.
+  var businesses = [];
+  var bizView = { query: '', sort: 'name', page: 1, perPage: 10 };
+
+  function matchingBusinesses() {
+    var query = bizView.query.trim().toLowerCase();
+    var found = businesses.filter(function (business) {
+      if (!query) return true;
+      // Address and category are searched too: with many venues, "the one on
+      // Harbour Lane" is often how you remember it.
+      return [business.name, business.category, business.address, business.slug]
+        .filter(Boolean)
+        .some(function (field) {
+          return String(field).toLowerCase().indexOf(query) !== -1;
+        });
+    });
+
+    return found.sort(function (a, b) {
+      if (bizView.sort === 'reviews') return (b.reviewCount || 0) - (a.reviewCount || 0);
+      // A business with no reviews has no average to rank by, so it sorts last
+      // rather than as a zero, which would read as "rated badly".
+      if (bizView.sort === 'rating') {
+        if (!a.reviewCount && !b.reviewCount) return 0;
+        if (!a.reviewCount) return 1;
+        if (!b.reviewCount) return -1;
+        return (b.average || 0) - (a.average || 0);
+      }
+      return String(a.name).localeCompare(String(b.name));
+    });
+  }
+
+  function renderPager(total) {
+    var pages = Math.max(1, Math.ceil(total / bizView.perPage));
+    el('business-pager').classList.toggle('hidden', pages < 2);
+    el('business-page-label').textContent = 'Page ' + bizView.page + ' of ' + pages;
+    el('business-prev').disabled = bizView.page <= 1;
+    el('business-next').disabled = bizView.page >= pages;
+
+    var count = el('business-count');
+    if (!businesses.length) count.textContent = '';
+    else if (total === businesses.length) {
+      count.textContent = total + (total === 1 ? ' business' : ' businesses');
+    } else {
+      count.textContent = total + ' of ' + businesses.length + ' businesses';
+    }
+  }
+
   function loadBusinesses() {
     return api('/api/admin/businesses').then(function (data) {
-      var list = el('business-list');
-      list.textContent = '';
-      el('business-empty').classList.toggle('hidden', data.businesses.length > 0);
+      businesses = data.businesses || [];
+      renderBusinesses();
+    });
+  }
 
-      data.businesses.forEach(function (business) {
+  function renderBusinesses() {
+    var list = el('business-list');
+    list.textContent = '';
+
+    var matches = matchingBusinesses();
+    var pages = Math.max(1, Math.ceil(matches.length / bizView.perPage));
+    // Deleting the last row of the last page, or typing a narrower search,
+    // can leave us past the end.
+    if (bizView.page > pages) bizView.page = pages;
+
+    var empty = el('business-empty');
+    empty.classList.toggle('hidden', matches.length > 0);
+    empty.textContent = businesses.length
+      ? 'No businesses match that search.'
+      : 'No businesses yet. Add the first one above.';
+
+    el('business-controls').classList.toggle('hidden', businesses.length < 2);
+
+    var from = (bizView.page - 1) * bizView.perPage;
+    matches.slice(from, from + bizView.perPage).forEach(function (business) {
         var row = document.createElement('div');
         row.className = 'biz';
 
@@ -325,9 +407,32 @@
         row.appendChild(img);
         row.appendChild(main);
         list.appendChild(row);
-      });
     });
+
+    renderPager(matches.length);
   }
+
+  el('business-search').addEventListener('input', function (event) {
+    bizView.query = event.target.value;
+    bizView.page = 1;
+    renderBusinesses();
+  });
+
+  el('business-sort').addEventListener('change', function (event) {
+    bizView.sort = event.target.value;
+    bizView.page = 1;
+    renderBusinesses();
+  });
+
+  el('business-prev').addEventListener('click', function () {
+    if (bizView.page > 1) bizView.page -= 1;
+    renderBusinesses();
+  });
+
+  el('business-next').addEventListener('click', function () {
+    bizView.page += 1;
+    renderBusinesses();
+  });
 
   el('create-business').addEventListener('submit', function (event) {
     event.preventDefault();

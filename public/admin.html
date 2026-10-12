@@ -108,8 +108,31 @@
 
           <section class="card" aria-labelledby="list-heading">
             <h2 id="list-heading">Businesses</h2>
+
+            <div class="list-controls hidden" id="business-controls">
+              <input
+                type="search"
+                id="business-search"
+                placeholder="Search by name, category or address"
+                aria-label="Search businesses"
+                autocomplete="off"
+              />
+              <select id="business-sort" aria-label="Sort businesses">
+                <option value="name">Name (A-Z)</option>
+                <option value="reviews">Most reviews</option>
+                <option value="rating">Highest rated</option>
+              </select>
+            </div>
+            <p class="muted small" id="business-count" role="status" aria-live="polite"></p>
+
             <div id="business-list"></div>
             <p class="empty hidden" id="business-empty">No businesses yet. Add the first one above.</p>
+
+            <div class="pager hidden" id="business-pager">
+              <button type="button" class="secondary" id="business-prev">Previous</button>
+              <span class="muted small" id="business-page-label"></span>
+              <button type="button" class="secondary" id="business-next">Next</button>
+            </div>
           </section>
         </section>
 
