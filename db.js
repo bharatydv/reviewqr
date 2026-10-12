@@ -23,8 +23,13 @@ CREATE TABLE IF NOT EXISTS businesses (
   -- for it. Switching one off here never needs a restart or a key change.
   ai_drafts     INTEGER NOT NULL DEFAULT 1 CHECK (ai_drafts IN (0, 1)),
   google_signin INTEGER NOT NULL DEFAULT 1 CHECK (google_signin IN (0, 1)),
+  -- Who manages this business. NULL means nobody has claimed it yet, which is
+  -- how every business created before accounts existed starts out; only a
+  -- platform admin sees those.
+  owner_id    INTEGER REFERENCES owners (id) ON DELETE SET NULL,
   created_at  TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_businesses_owner ON businesses (owner_id);
 
 -- A reviewer. Normally just a device: the browser that scanned the code, known
 -- by the hash of a cookie it was given. email is only set for the businesses
@@ -58,6 +63,46 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at INTEGER NOT NULL,
   created_at TEXT NOT NULL
 );
+
+-- A business owner: somebody who signs in to the console and manages their own
+-- venues. Entirely separate from users, who are reviewers and never have a
+-- password - conflating the two would mean a reviewer's device cookie and an
+-- owner's password sat behind the same identity.
+CREATE TABLE IF NOT EXISTS owners (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  email         TEXT NOT NULL UNIQUE,
+  name          TEXT NOT NULL DEFAULT '',
+  password_hash TEXT NOT NULL,
+  -- A platform admin sees every business, not just their own. The first
+  -- account created gets this, so a fresh install has somebody in charge.
+  is_admin      INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
+  suspended     INTEGER NOT NULL DEFAULT 0 CHECK (suspended IN (0, 1)),
+  created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS owner_sessions (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id   INTEGER NOT NULL REFERENCES owners (id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  csrf_token TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_owner_sessions_owner ON owner_sessions (owner_id);
+
+-- Password reset codes. Separate from login_codes, which belong to reviewers:
+-- a code that can reset a password should never be interchangeable with one
+-- that just proves an email address.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id   INTEGER NOT NULL REFERENCES owners (id) ON DELETE CASCADE,
+  code_hash  TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  used_at    TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_password_resets_owner ON password_resets (owner_id, id DESC);
 
 CREATE TABLE IF NOT EXISTS reviews (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,6 +219,13 @@ export function migrate(db) {
     db.exec(
       'ALTER TABLE businesses ADD COLUMN google_signin INTEGER NOT NULL DEFAULT 1 CHECK (google_signin IN (0, 1))',
     );
+  }
+
+  if (!businessColumns.has('owner_id')) {
+    // Existing businesses keep working and stay visible to a platform admin
+    // until somebody claims them; printed QR codes are untouched either way.
+    db.exec('ALTER TABLE businesses ADD COLUMN owner_id INTEGER REFERENCES owners (id) ON DELETE SET NULL');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_businesses_owner ON businesses (owner_id)');
   }
 
   const reviewColumns = new Set(

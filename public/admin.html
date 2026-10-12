@@ -30,15 +30,83 @@
     <main class="admin-wide">
       <p id="status" class="status" role="status" aria-live="polite"></p>
 
-      <form id="sign-in" class="card hidden" novalidate>
-        <h1>Admin sign in</h1>
-        <p class="muted small">
-          Use the ADMIN_TOKEN from the server's environment. It is kept in this tab only.
-        </p>
-        <label for="password">Admin password</label>
-        <input type="password" id="password" autocomplete="current-password" required />
-        <button type="submit" id="sign-in-button">Sign in</button>
-      </form>
+      <div id="auth" class="hidden">
+        <!-- One card, four panes. Signing in, creating an account, asking for
+             a reset code and using one are the same conversation, so moving
+             between them should not feel like leaving the page. -->
+        <form id="pane-signin" class="card" novalidate>
+          <h1>Sign in</h1>
+          <p class="muted small">Manage your businesses, their QR codes and their reviews.</p>
+
+          <label for="signin-email">Email</label>
+          <input type="email" id="signin-email" autocomplete="username" required />
+
+          <label for="signin-password">Password</label>
+          <input type="password" id="signin-password" autocomplete="current-password" required />
+
+          <button type="submit" id="signin-button">Sign in</button>
+
+          <p class="footnote">
+            <a href="#" data-go="signup">Create an account</a>
+            <span class="muted" id="forgot-wrap">
+              ·
+              <a href="#" data-go="forgot">Forgot your password?</a>
+            </span>
+          </p>
+        </form>
+
+        <form id="pane-signup" class="card hidden" novalidate>
+          <h1 id="signup-heading">Create an account</h1>
+          <p class="muted small" id="signup-note">
+            Your businesses and their reviews belong to this account.
+          </p>
+
+          <label for="signup-name">Your name</label>
+          <input type="text" id="signup-name" maxlength="80" autocomplete="name" />
+
+          <label for="signup-email">Email</label>
+          <input type="email" id="signup-email" autocomplete="username" required />
+
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" autocomplete="new-password" required />
+          <p class="hint">At least 10 characters. Length matters more than symbols.</p>
+
+          <button type="submit" id="signup-button">Create account</button>
+          <p class="footnote"><a href="#" data-go="signin">I already have an account</a></p>
+        </form>
+
+        <form id="pane-forgot" class="card hidden" novalidate>
+          <h1>Forgot your password?</h1>
+          <p class="muted small">
+            We will email you a 6-digit code. It expires in 30 minutes.
+          </p>
+
+          <label for="forgot-email">Email</label>
+          <input type="email" id="forgot-email" autocomplete="username" required />
+
+          <button type="submit" id="forgot-button">Email me a code</button>
+          <p class="footnote"><a href="#" data-go="signin">Back to signing in</a></p>
+        </form>
+
+        <form id="pane-reset" class="card hidden" novalidate>
+          <h1>Set a new password</h1>
+          <p class="muted small" id="reset-note">
+            Enter the code we emailed you, and the password you want instead.
+          </p>
+
+          <label for="reset-email">Email</label>
+          <input type="email" id="reset-email" autocomplete="username" required />
+
+          <label for="reset-code">Code</label>
+          <input type="text" id="reset-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required />
+
+          <label for="reset-password">New password</label>
+          <input type="password" id="reset-password" autocomplete="new-password" required />
+
+          <button type="submit" id="reset-button">Set new password</button>
+          <p class="footnote"><a href="#" data-go="forgot">Send another code</a></p>
+        </form>
+      </div>
 
       <div id="console" class="hidden">
         <div class="tabs" role="tablist" aria-label="Admin sections">
@@ -50,6 +118,9 @@
           </button>
           <button type="button" class="secondary" id="tab-people" role="tab" aria-selected="false">
             People
+          </button>
+          <button type="button" class="secondary" id="tab-account" role="tab" aria-selected="false">
+            Account
           </button>
           <button type="button" class="secondary" id="sign-out">Sign out</button>
         </div>
@@ -162,6 +233,33 @@
             <div id="people-list"></div>
             <p class="empty hidden" id="people-empty">Nobody has signed in yet.</p>
           </section>
+        </section>
+        <section id="panel-account" class="hidden" role="tabpanel" aria-labelledby="tab-account">
+          <section class="card" aria-labelledby="account-heading">
+            <h2 id="account-heading">Your account</h2>
+            <dl class="account-facts">
+              <dt>Signed in as</dt>
+              <dd id="account-email">—</dd>
+              <dt>Role</dt>
+              <dd id="account-role">—</dd>
+            </dl>
+          </section>
+
+          <form id="change-password" class="card" novalidate>
+            <h2>Change your password</h2>
+            <p class="muted small">
+              Changing it signs out every other browser you are signed in on. This one stays.
+            </p>
+
+            <label for="current-password">Current password</label>
+            <input type="password" id="current-password" autocomplete="current-password" required />
+
+            <label for="new-password">New password</label>
+            <input type="password" id="new-password" autocomplete="new-password" required />
+            <p class="hint">At least 10 characters.</p>
+
+            <button type="submit" id="change-password-button">Change password</button>
+          </form>
         </section>
       </div>
     </main>

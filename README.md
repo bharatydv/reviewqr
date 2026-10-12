@@ -7,7 +7,7 @@ reviews from exactly those details, and they choose one, edit it and post it.
 No build step, no native dependencies, no tracking. Node, SQLite and three npm packages.
 
 - **Customer page:** `/b/:slug`
-- **Admin console:** `/admin`
+- **Owner console:** `/admin` — an email and a password each
 - **QR codes:** `/api/b/:slug/qr.png` and `.svg`
 
 ## Requirements
@@ -30,7 +30,12 @@ npm start
 Open http://localhost:3000. A demo business, **Blue Door Café**, is seeded with four reviews, one of them answered:
 
 - profile: http://localhost:3000/b/blue-door-cafe
-- admin: http://localhost:3000/admin (sign in with your `ADMIN_TOKEN`)
+- console: http://localhost:3000/admin — create an account there
+
+The first account created runs the server: it is the platform admin, and it adopts every business
+that has no owner yet, so the seeded demo is waiting for you rather than an empty list. Accounts
+created after it are ordinary owners who see only their own businesses. See
+[Accounts](#accounts).
 
 In development, if `SMTP_HOST` is empty the login code is printed to the server console instead of
 being emailed:
@@ -43,7 +48,7 @@ So you can walk the entire customer flow locally with no mail server.
 
 ```bash
 npm run dev    # same thing, with --watch
-npm test       # 81 tests, in-memory database, the AI call and Google mocked
+npm test       # 95 tests, in-memory database, the AI call and Google mocked
 ```
 
 The app refuses to start with an unusable configuration (no `ADMIN_TOKEN`; in production: a
@@ -209,6 +214,36 @@ Two deliberate choices in `lib/ai.js`, both documented in the code:
 much cheaper and faster call, `claude-haiku-5-5` suits this workload well — it is a one-line
 change in `.env`.
 
+## Accounts
+
+The console at `/admin` belongs to owner accounts. They are a separate identity from reviewers:
+an owner has an email and a password, a reviewer is a device cookie that left a review, and
+nothing in the schema lets one be mistaken for the other.
+
+- **The first account to sign up runs the server.** It becomes the platform admin and adopts every
+  business that has no owner — on an existing install that is all of them, on a fresh one the
+  seeded demo. Somebody has to be in charge, and on an empty install there is nobody to grant it.
+- **Everyone after that is an ordinary owner.** They see the businesses they created and nothing
+  else. Another owner's business answers `404`, not `403`: a `403` would confirm the id exists,
+  which is how you count somebody else's customers.
+- **Reviewers are shared, so the People tab is the platform admin's.** Who has signed in and who is
+  suspended spans every business on the server, so it is not an ordinary owner's to see.
+- **Passwords** are scrypt (`N=16384, r=8, p=1`) from `node:crypto`, so there is still nothing to
+  compile. At least 10 characters; length is the rule that does the work. Hashing is async on
+  purpose — at those parameters it costs ~100ms of CPU, and `scryptSync` would stall the single
+  thread for that long on every sign-in, reviewers included.
+- **Wrong password and unknown account are refused in the same words,** and the hash is computed
+  either way, so neither the wording nor the timing says which it was.
+- **A forgotten password needs SMTP:** a 6-digit code, 30 minutes, 5 attempts, single use. Asking
+  for one answers the same whether or not the address has an account. With no `SMTP_HOST` the
+  console does not offer the link and the endpoint says so, rather than sending to a log nobody
+  reads. Using a code ends every session, including one an attacker is holding; changing a password
+  from the **Account** tab ends every session but the browser doing it.
+- **`ADMIN_TOKEN` still works** as the `x-admin-token` header, needs no account and sees
+  everything. It is the API path — the `curl` examples below use it — and the rescue path, since it
+  works before the first account exists. It is not a browser sign-in: the console has no field for
+  it any more. A business created with the token has no owner, so only a platform admin sees it.
+
 ## Security
 
 - `user_id` comes only from the cookies, never from a request body. A `user_id` in a body is
@@ -218,14 +253,21 @@ change in `.env`.
   scripts cannot read or forge it.
 - Sessions, for businesses that require an email: a random 32-byte token in an `HttpOnly`,
   `SameSite=Lax` cookie; only its SHA-256 hash is stored; 30-day expiry.
+- Owner sessions, for the console: the same shape, in its own `rq_owner` cookie and its own table,
+  so signing out of the console never signs you out of a review you left in the same browser, or
+  the other way round. A suspended owner keeps the cookie and gets nothing with it.
 - CSRF: a double-submit token. Every `POST`, `PUT`, `PATCH` and `DELETE` must echo the `rq_csrf`
-  cookie in an `x-csrf-token` header, and once signed in the token must also match the one stored
-  on the session. The token is rotated at sign-in and sign-out. Admin routes are the exception:
-  they authenticate with the `x-admin-token` header, which a browser never sends ambiently, so
-  they are not exposed to CSRF and stay usable from `curl`.
+  cookie in an `x-csrf-token` header, and once signed in as a reviewer the token must also match
+  the one stored on the session. The token is rotated at sign-in and sign-out. Console routes are
+  double-submit only, not pinned to the reviewer session: an owner may have left a review in this
+  browser too, and that session's token goes stale the moment signing in rotates the cookie, which
+  would lock them out of their own console. The `x-admin-token` path carries no CSRF check and
+  needs none — a cross-site form cannot set a custom header, so holding the token is itself proof
+  the request was deliberate, and the route stays usable from `curl`.
 - Rate limits, in a SQLite table so they survive a restart: suggestions 10 per hour per device and
   30 per hour per IP, reviews 3 **successful** posts per hour per device and 10 per hour per IP,
-  login endpoints 10 per 15 minutes per IP, code requests 5 per hour per email *and* per IP, admin
+  login endpoints 10 per 15 minutes per IP (reviewer and owner sign-in, signup, forgot and reset
+  all count against it), code requests 5 per hour per email *and* per IP, admin
   100 per 15 minutes per IP. The per-IP figures matter more than they used to: a device is cheap
   to reset by clearing cookies, so the address is the backstop. Set `TRUST_PROXY=1` behind a proxy
   or they all collapse onto the proxy's IP.
@@ -260,7 +302,7 @@ happened in plain language.
 | --- | --- | --- |
 | `PORT` | `3000` | |
 | `BASE_URL` | `http://localhost:3000` | What the QR codes encode. Must be `https://` in production. |
-| `ADMIN_TOKEN` | — | **Required.** The admin password, and the pepper for login-code hashes. At least 16 characters in production. |
+| `ADMIN_TOKEN` | — | **Required.** The API and rescue token for the console (`x-admin-token`), and the pepper for login-code hashes. Owners sign in with their own passwords instead. At least 16 characters in production. |
 | `DB_PATH` | `./data/reviewqr.db` | `:memory:` gives a throwaway database. Parent directories are created. |
 | `TRUST_PROXY` | `0` | Set to `1` behind a reverse proxy, so rate limits see the real client IP. |
 | `MAX_VISIBLE_REVIEWS` | `6` | Clamped to 3–6. |
@@ -299,7 +341,21 @@ PUT    /api/b/:slug/reviews/me  {rating, comment}
 DELETE /api/b/:slug/reviews/me
 ```
 
-Admin (`x-admin-token: $ADMIN_TOKEN`):
+The console's own account (cookies + `x-csrf-token`; no sign-in needed to reach them):
+
+```
+GET  /api/owner/me                       who is signed in, and whether setup is still needed
+POST /api/owner/signup          {email, name, password}
+POST /api/owner/login           {email, password}
+POST /api/owner/logout
+POST /api/owner/password        {currentPassword, newPassword}
+POST /api/owner/forgot          {email}            emails a 6-digit code
+POST /api/owner/reset           {email, code, newPassword}
+```
+
+Admin — either an owner session (cookies + `x-csrf-token`) or `x-admin-token: $ADMIN_TOKEN`.
+An owner sees only their own businesses and their reviews; a platform admin and the token see
+every one, and `/api/admin/users` is theirs alone:
 
 ```
 GET    /api/admin/businesses
@@ -313,8 +369,8 @@ PATCH  /api/admin/reviews/:id           {status: "visible" | "hidden"}
 DELETE /api/admin/reviews/:id
 PUT    /api/admin/reviews/:id/reply     {reply}   the business's public answer, up to 600 chars
 DELETE /api/admin/reviews/:id/reply
-GET    /api/admin/users
-PATCH  /api/admin/users/:id             {suspended: true | false}
+GET    /api/admin/users                 platform admin only
+PATCH  /api/admin/users/:id             {suspended: true | false}   platform admin only
 ```
 
 For example:
@@ -566,6 +622,7 @@ server.js        Express app, routes, sessions, CSRF, admin  (createApp is expor
 db.js            Schema, slugs, demo seed
 lib/env.js       .env reader and config, with startup validation
 lib/security.js  Hashing, tokens, 6-digit codes, constant-time compare
+lib/auth.js      Owner passwords: scrypt hashing, verification, the rules a password must meet
 lib/ratelimit.js Sliding-window limits, in SQLite
 lib/mail.js      Nodemailer, or the console in development
 lib/google.js    Verifies Google One Tap ID tokens against Google's signing keys
@@ -583,8 +640,11 @@ deploy/          Caddyfile, and the scripts that stand each host up:
 
 ## Ideas for next steps
 
-- **A real owner account** instead of one shared `ADMIN_TOKEN`: per-business logins, so a group
-  can hand out access without sharing one password.
+- **More than one person per business.** Owner accounts exist, but a business has exactly one
+  owner: a venue with a manager and an assistant still shares a password. Invites, and handing a
+  business to somebody else, are the missing half.
+- **Claiming a business.** One created with `ADMIN_TOKEN` has no owner, and only a platform admin
+  sees it. A screen for assigning those would finish the story.
 - **Photos.** One image per review, resized on upload, with its own moderation queue.
 - **Email the business** when a new review lands, especially a 1- or 2-star one, so they can
   respond the same day.

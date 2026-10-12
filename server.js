@@ -6,6 +6,14 @@ import QRCode from 'qrcode';
 
 import { loadEnv, buildConfig, assertConfig } from './lib/env.js';
 import {
+  hashPassword,
+  verifyPassword,
+  passwordProblems,
+  normalizeEmail,
+  looksLikeEmail,
+  NO_SUCH_ACCOUNT,
+} from './lib/auth.js';
+import {
   openDb,
   seed,
   createBusiness,
@@ -35,6 +43,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(HERE, 'public');
 
 const SESSION_COOKIE = 'rq_session';
+// The console session. A separate cookie from the reviewer's, so signing out
+// of one never signs you out of the other.
+const OWNER_COOKIE = 'rq_owner';
 const CSRF_COOKIE = 'rq_csrf';
 const DEVICE_COOKIE = 'rq_device';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -334,6 +345,41 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
     return next();
   });
 
+  // Resolve the owner session: whoever is signed in to the console. Kept apart
+  // from the reviewer session above on purpose - an owner has a password and
+  // manages businesses, a reviewer is a device that left a review, and one
+  // should never be mistakable for the other.
+  app.use((req, res, next) => {
+    req.owner = null;
+    req.ownerSession = null;
+    const raw = req.cookies[OWNER_COOKIE];
+    if (!raw) return next();
+    const row = db
+      .prepare(
+        `SELECT s.id, s.owner_id, s.csrf_token, s.expires_at,
+                o.email, o.name, o.is_admin, o.suspended
+           FROM owner_sessions s
+           JOIN owners o ON o.id = s.owner_id
+          WHERE s.token_hash = ?`,
+      )
+      .get(sha256(raw));
+    if (!row) return next();
+    if (row.expires_at <= Date.now()) {
+      db.prepare('DELETE FROM owner_sessions WHERE id = ?').run(row.id);
+      return next();
+    }
+    // A suspended owner keeps the cookie but gets nothing with it.
+    if (row.suspended) return next();
+    req.ownerSession = { id: row.id, csrfToken: row.csrf_token };
+    req.owner = {
+      id: row.owner_id,
+      email: row.email,
+      name: row.name,
+      isAdmin: Boolean(row.is_admin),
+    };
+    return next();
+  });
+
   // The ordinary reviewer is just this browser. Every visitor gets a device
   // cookie, and that is the identity behind "one review per business" - no
   // email, no name, nothing asked. An email session, where a business asks for
@@ -425,12 +471,83 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
     return req.user;
   }
 
-  function requireAdmin(req, res, next) {
-    const supplied = req.get('x-admin-token') || '';
-    if (!config.adminToken || !supplied || !timingSafeEqualStr(supplied, config.adminToken)) {
-      return res.status(401).json({ error: 'Wrong admin password.' });
+  // The console is reachable two ways: signed in as an owner, or with the
+  // ADMIN_TOKEN header. The token stays because it is the rescue path - it
+  // works when nobody can sign in, including before the first account exists
+  // and after somebody forgets the only password on an install with no SMTP.
+  // Double submit, and only that: the CSRF cookie and the x-csrf-token header
+  // have to match. Deliberately not pinned to the reviewer session the way
+  // requireCsrf is - an owner may also have left a review in this browser, and
+  // that session's stored token goes stale the moment signing in rotates the
+  // cookie, which would lock them out of their own console.
+  function requireConsoleCsrf(req, res, next) {
+    if (!MUTATING.has(req.method)) return next();
+    const header = req.get('x-csrf-token') || '';
+    const cookie = req.cookies[CSRF_COOKIE] || '';
+    if (!header || !cookie || !timingSafeEqualStr(header, cookie)) {
+      return res.status(403).json({ error: 'Your page is out of date. Please reload and try again.' });
     }
     return next();
+  }
+
+  function requireAdmin(req, res, next) {
+    const supplied = req.get('x-admin-token') || '';
+    if (supplied && config.adminToken && timingSafeEqualStr(supplied, config.adminToken)) {
+      // No CSRF check on this path, and none needed: a custom header cannot be
+      // set by a cross-site form, so holding the token is already proof the
+      // request was made deliberately rather than by somebody else's page.
+      req.superAdmin = true;
+      return next();
+    }
+    if (!req.owner) return res.status(401).json({ error: 'Please sign in.' });
+    // A session cookie, by contrast, the browser attaches to any request that
+    // reaches us - including one made by a page we did not write. Hence this.
+    return requireConsoleCsrf(req, res, next);
+  }
+
+  // Platform-wide screens - the reviewer list, who is suspended - belong to
+  // whoever runs the install, not to a business owner who happens to be
+  // signed in. Reviewers are shared across every business.
+  function requirePlatformAdmin(req, res, next) {
+    if (req.superAdmin || req.owner?.isAdmin) return next();
+    return res.status(403).json({ error: 'That is only available to a platform admin.' });
+  }
+
+  // null means "no filter": a platform admin sees every business, including
+  // the ones nobody has claimed. Anyone else sees their own and nothing else.
+  function ownerScope(req) {
+    if (req.superAdmin || req.owner?.isAdmin) return null;
+    return req.owner ? req.owner.id : -1;
+  }
+
+  // Looks a business up and confirms it is in scope. Answers 404 rather than
+  // 403 when it is not: telling a stranger that id 7 exists but is somebody
+  // else's is how you enumerate the customer list.
+  function scopedBusiness(req, res, id) {
+    const business = db.prepare('SELECT * FROM businesses WHERE id = ?').get(id);
+    const scope = ownerScope(req);
+    if (!business || (scope !== null && business.owner_id !== scope)) {
+      res.status(404).json({ error: 'We could not find that business.' });
+      return null;
+    }
+    return business;
+  }
+
+  // The same question for a review: it is in scope when its business is.
+  function scopedReview(req, res, id) {
+    const review = db
+      .prepare(
+        `SELECT r.*, b.owner_id AS business_owner_id, b.name AS business_name
+           FROM reviews r JOIN businesses b ON b.id = r.business_id
+          WHERE r.id = ?`,
+      )
+      .get(id);
+    const scope = ownerScope(req);
+    if (!review || (scope !== null && review.business_owner_id !== scope)) {
+      res.status(404).json({ error: 'We could not find that review.' });
+      return null;
+    }
+    return review;
   }
 
   function findBusiness(req, res) {
@@ -876,6 +993,231 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
     };
   }
 
+  // ---- owner accounts
+
+  const RESET_TTL_MS = 30 * 60 * 1000;
+  const RESET_MAX_ATTEMPTS = 5;
+
+  function ownerJson(owner) {
+    return {
+      id: owner.id,
+      email: owner.email,
+      name: owner.name,
+      isAdmin: Boolean(owner.is_admin ?? owner.isAdmin),
+    };
+  }
+
+  function startOwnerSession(res, req, ownerId) {
+    const token = randomToken(32);
+    const csrfToken = rotateCsrf(res, req);
+    db.prepare(
+      'INSERT INTO owner_sessions (owner_id, token_hash, csrf_token, expires_at, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(ownerId, sha256(token), csrfToken, Date.now() + SESSION_TTL_MS, nowIso());
+    res.append('Set-Cookie', serializeCookie(OWNER_COOKIE, token, { ...cookieBase, httpOnly: true }));
+    return csrfToken;
+  }
+
+  app.get('/api/owner/me', (req, res) => {
+    // Whether anyone has signed up yet decides what the page offers first: on
+    // an empty install the sensible default is "create the first account", not
+    // "sign in" to something that does not exist yet.
+    const anyOwner = db.prepare('SELECT 1 FROM owners LIMIT 1').get();
+    res.json({
+      owner: req.owner ? ownerJson(req.owner) : null,
+      superAdmin: Boolean(req.superAdmin),
+      setupNeeded: !anyOwner,
+      canResetPassword: config.smtpConfigured,
+      csrfToken: req.csrfToken,
+    });
+  });
+
+  app.post('/api/owner/signup', loginIpLimiter, requireConsoleCsrf, async (req, res, next) => {
+    try {
+      const body = req.body ?? {};
+      const email = normalizeEmail(body.email);
+      const name = clean(body.name, 80);
+      const password = typeof body.password === 'string' ? body.password : '';
+
+      if (!looksLikeEmail(email)) {
+        return res.status(400).json({ error: 'Please enter a valid email address.' });
+      }
+      const problems = passwordProblems(password);
+      if (problems.length) return res.status(400).json({ error: problems.join(' ') });
+
+      if (db.prepare('SELECT 1 FROM owners WHERE email = ?').get(email)) {
+        // Said plainly. An attacker can learn the same thing from the sign-in
+        // form anyway, and hiding it here only confuses the honest case.
+        return res
+          .status(409)
+          .json({ error: 'There is already an account with that email. Sign in instead.' });
+      }
+
+      // The first account runs the place. Somebody has to, and on a fresh
+      // install there is nobody to grant it.
+      const first = !db.prepare('SELECT 1 FROM owners LIMIT 1').get();
+      const info = db
+        .prepare(
+          'INSERT INTO owners (email, name, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run(email, name, await hashPassword(password), first ? 1 : 0, nowIso());
+
+      const ownerId = Number(info.lastInsertRowid);
+      // Businesses that predate accounts have no owner. The first admin adopts
+      // them, so an existing install does not look empty after upgrading.
+      if (first) db.prepare('UPDATE businesses SET owner_id = ? WHERE owner_id IS NULL').run(ownerId);
+
+      const csrfToken = startOwnerSession(res, req, ownerId);
+      const owner = db.prepare('SELECT * FROM owners WHERE id = ?').get(ownerId);
+      return res.status(201).json({ owner: ownerJson(owner), csrfToken });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post('/api/owner/login', loginIpLimiter, requireConsoleCsrf, async (req, res, next) => {
+    try {
+      const body = req.body ?? {};
+      const email = normalizeEmail(body.email);
+      const password = typeof body.password === 'string' ? body.password : '';
+      const owner = db.prepare('SELECT * FROM owners WHERE email = ?').get(email);
+
+      // One message for "no such account" and for "wrong password", and scrypt
+      // is run even when the account is missing, so neither the wording nor the
+      // timing says which of the two it was.
+      const ok = await verifyPassword(password, owner ? owner.password_hash : NO_SUCH_ACCOUNT);
+      if (!owner || !ok) {
+        return res.status(401).json({ error: 'That email and password do not match.' });
+      }
+      if (owner.suspended) {
+        return res.status(403).json({ error: 'This account has been suspended.' });
+      }
+
+      const csrfToken = startOwnerSession(res, req, owner.id);
+      return res.json({ owner: ownerJson(owner), csrfToken });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post('/api/owner/logout', requireConsoleCsrf, (req, res) => {
+    if (req.ownerSession) {
+      db.prepare('DELETE FROM owner_sessions WHERE id = ?').run(req.ownerSession.id);
+    }
+    res.append('Set-Cookie', serializeCookie(OWNER_COOKIE, '', { ...cookieBase, maxAge: 0, httpOnly: true }));
+    res.json({ owner: null, csrfToken: rotateCsrf(res, req) });
+  });
+
+  app.post('/api/owner/password', adminIpLimiter, requireConsoleCsrf, async (req, res, next) => {
+    try {
+      if (!req.owner) return res.status(401).json({ error: 'Please sign in.' });
+      const body = req.body ?? {};
+      const current = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+      const replacement = typeof body.newPassword === 'string' ? body.newPassword : '';
+
+      const owner = db.prepare('SELECT * FROM owners WHERE id = ?').get(req.owner.id);
+      if (!owner || !(await verifyPassword(current, owner.password_hash))) {
+        return res.status(403).json({ error: 'That is not your current password.' });
+      }
+      const problems = passwordProblems(replacement);
+      if (problems.length) return res.status(400).json({ error: problems.join(' ') });
+      if (current === replacement) {
+        return res.status(400).json({ error: 'That is the password you already have.' });
+      }
+
+      db.prepare('UPDATE owners SET password_hash = ? WHERE id = ?').run(
+        await hashPassword(replacement),
+        owner.id,
+      );
+      // Every other session is dropped. Changing a password is what you do
+      // when you think somebody else has it, and leaving them signed in would
+      // defeat the point. This browser keeps its own session.
+      db.prepare('DELETE FROM owner_sessions WHERE owner_id = ? AND id != ?').run(
+        owner.id,
+        req.ownerSession.id,
+      );
+      return res.json({ changed: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post('/api/owner/forgot', loginIpLimiter, requireConsoleCsrf, async (req, res, next) => {
+    try {
+      const email = normalizeEmail((req.body ?? {}).email);
+      const owner = db.prepare('SELECT * FROM owners WHERE email = ?').get(email);
+
+      // The same answer whether or not that account exists. This form needs no
+      // sign-in, so a different reply for each would make it a way of testing
+      // which of your customers has an account here.
+      if (!owner) return res.json({ sent: true });
+
+      if (!config.smtpConfigured) {
+        // Honest rather than silently useless: with no SMTP the code can only
+        // reach the server console, which nobody is reading in production.
+        return res.status(503).json({
+          error:
+            'This server cannot send email, so password reset is unavailable. Ask your administrator.',
+        });
+      }
+
+      const code = generateLoginCode();
+      db.prepare('DELETE FROM password_resets WHERE owner_id = ?').run(owner.id);
+      db.prepare(
+        'INSERT INTO password_resets (owner_id, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?)',
+      ).run(owner.id, hashCode(email, code), Date.now() + RESET_TTL_MS, nowIso());
+
+      await mailer.sendPasswordReset(email, code);
+      return res.json({ sent: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post('/api/owner/reset', loginIpLimiter, requireConsoleCsrf, async (req, res, next) => {
+    try {
+      const body = req.body ?? {};
+      const email = normalizeEmail(body.email);
+      const code = clean(body.code, 12);
+      const password = typeof body.newPassword === 'string' ? body.newPassword : '';
+
+      const problems = passwordProblems(password);
+      if (problems.length) return res.status(400).json({ error: problems.join(' ') });
+
+      const owner = db.prepare('SELECT * FROM owners WHERE email = ?').get(email);
+      const bad = { error: 'That code is wrong or has expired. Ask for a new one.' };
+      if (!owner) return res.status(400).json(bad);
+
+      const row = db
+        .prepare(
+          'SELECT * FROM password_resets WHERE owner_id = ? AND used_at IS NULL ORDER BY id DESC LIMIT 1',
+        )
+        .get(owner.id);
+      if (!row || row.expires_at <= Date.now()) return res.status(400).json(bad);
+      if (row.attempts >= RESET_MAX_ATTEMPTS) {
+        db.prepare('DELETE FROM password_resets WHERE id = ?').run(row.id);
+        return res.status(429).json({ error: 'Too many wrong codes. Ask for a new one.' });
+      }
+      if (!timingSafeEqualStr(hashCode(email, code), row.code_hash)) {
+        db.prepare('UPDATE password_resets SET attempts = attempts + 1 WHERE id = ?').run(row.id);
+        return res.status(400).json(bad);
+      }
+
+      db.prepare('UPDATE owners SET password_hash = ? WHERE id = ?').run(
+        await hashPassword(password),
+        owner.id,
+      );
+      db.prepare('DELETE FROM password_resets WHERE owner_id = ?').run(owner.id);
+      // Whoever asked for this reset may be locking somebody out deliberately,
+      // so every existing session goes, including any an attacker holds.
+      db.prepare('DELETE FROM owner_sessions WHERE owner_id = ?').run(owner.id);
+
+      const csrfToken = startOwnerSession(res, req, owner.id);
+      return res.json({ owner: ownerJson(owner), csrfToken });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
   app.get('/api/admin/businesses', adminIpLimiter, requireAdmin, (req, res) => {
     const rows = db
       .prepare(
@@ -884,9 +1226,10 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
                 (SELECT COUNT(*) FROM reviews r WHERE r.business_id = b.id AND r.status = 'visible') AS visible_count,
                 (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.business_id = b.id AND r.status = 'visible') AS average
            FROM businesses b
+          WHERE (? IS NULL OR b.owner_id = ?)
           ORDER BY b.id DESC`,
       )
-      .all();
+      .all(ownerScope(req), ownerScope(req));
     res.json({
       baseUrl: config.baseUrl,
       businesses: rows.map((row) => ({
@@ -919,6 +1262,11 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
       topics: parseTopicList(body.topics ?? []),
       googleReviewUrl: google.url,
     });
+    // Created by an owner, so it is theirs. Created with the ADMIN_TOKEN it
+    // has no owner, and only a platform admin will see it until one claims it.
+    if (req.owner) {
+      db.prepare('UPDATE businesses SET owner_id = ? WHERE id = ?').run(req.owner.id, business.id);
+    }
     let created = business;
     if (setBusinessSwitches(db, business.id, body)) {
       created = db.prepare('SELECT * FROM businesses WHERE id = ?').get(business.id);
@@ -931,6 +1279,7 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
   app.patch('/api/admin/businesses/:id', adminIpLimiter, requireAdmin, (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: 'That is not a valid business id.' });
+    if (!scopedBusiness(req, res, id)) return undefined;
     const body = req.body ?? {};
     const changes = {};
 
@@ -966,14 +1315,15 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
   app.delete('/api/admin/businesses/:id', adminIpLimiter, requireAdmin, (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: 'That is not a valid business id.' });
-    const info = db.prepare('DELETE FROM businesses WHERE id = ?').run(id);
-    if (!info.changes) return res.status(404).json({ error: 'We could not find that business.' });
+    if (!scopedBusiness(req, res, id)) return undefined;
+    db.prepare('DELETE FROM businesses WHERE id = ?').run(id);
     return res.json({ deleted: true });
   });
 
   app.get('/api/admin/businesses/:id/reviews', adminIpLimiter, requireAdmin, (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: 'That is not a valid business id.' });
+    if (!scopedBusiness(req, res, id)) return undefined;
     const rows = db
       .prepare(
         `SELECT r.*, u.email, u.device_hash, u.first_name, u.suspended, u.id AS user_id
@@ -994,10 +1344,11 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
            FROM reviews r
            JOIN users u ON u.id = r.user_id
            JOIN businesses b ON b.id = r.business_id
+          WHERE (? IS NULL OR b.owner_id = ?)
           ORDER BY r.id DESC
           LIMIT 500`,
       )
-      .all();
+      .all(ownerScope(req), ownerScope(req));
     res.json({
       reviews: rows.map((row) => ({
         ...adminReview(row),
@@ -1037,16 +1388,16 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
     if (status !== 'visible' && status !== 'hidden') {
       return res.status(400).json({ error: 'Status has to be "visible" or "hidden".' });
     }
-    const info = db.prepare('UPDATE reviews SET status = ? WHERE id = ?').run(status, id);
-    if (!info.changes) return res.status(404).json({ error: 'We could not find that review.' });
+    if (!scopedReview(req, res, id)) return undefined;
+    db.prepare('UPDATE reviews SET status = ? WHERE id = ?').run(status, id);
     return res.json({ id, status });
   });
 
   app.delete('/api/admin/reviews/:id', adminIpLimiter, requireAdmin, (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: 'That is not a valid review id.' });
-    const info = db.prepare('DELETE FROM reviews WHERE id = ?').run(id);
-    if (!info.changes) return res.status(404).json({ error: 'We could not find that review.' });
+    if (!scopedReview(req, res, id)) return undefined;
+    db.prepare('DELETE FROM reviews WHERE id = ?').run(id);
     return res.json({ deleted: true });
   });
 
@@ -1062,25 +1413,21 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
         error: `A reply needs to be between 1 and ${REPLY_MAX} characters.`,
       });
     }
+    if (!scopedReview(req, res, id)) return undefined;
     const repliedAt = nowIso();
-    const info = db
-      .prepare('UPDATE reviews SET reply = ?, replied_at = ? WHERE id = ?')
-      .run(reply, repliedAt, id);
-    if (!info.changes) return res.status(404).json({ error: 'We could not find that review.' });
+    db.prepare('UPDATE reviews SET reply = ?, replied_at = ? WHERE id = ?').run(reply, repliedAt, id);
     return res.json({ id, reply, repliedAt });
   });
 
   app.delete('/api/admin/reviews/:id/reply', adminIpLimiter, requireAdmin, (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: 'That is not a valid review id.' });
-    const info = db
-      .prepare("UPDATE reviews SET reply = '', replied_at = NULL WHERE id = ?")
-      .run(id);
-    if (!info.changes) return res.status(404).json({ error: 'We could not find that review.' });
+    if (!scopedReview(req, res, id)) return undefined;
+    db.prepare("UPDATE reviews SET reply = '', replied_at = NULL WHERE id = ?").run(id);
     return res.json({ id, reply: '', repliedAt: null });
   });
 
-  app.get('/api/admin/users', adminIpLimiter, requireAdmin, (req, res) => {
+  app.get('/api/admin/users', adminIpLimiter, requireAdmin, requirePlatformAdmin, (req, res) => {
     const rows = db
       .prepare(
         `SELECT u.*, (SELECT COUNT(*) FROM reviews r WHERE r.user_id = u.id) AS review_count
@@ -1100,7 +1447,7 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
     });
   });
 
-  app.patch('/api/admin/users/:id', adminIpLimiter, requireAdmin, (req, res) => {
+  app.patch('/api/admin/users/:id', adminIpLimiter, requireAdmin, requirePlatformAdmin, (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: 'That is not a valid user id.' });
     if (typeof req.body?.suspended !== 'boolean') {

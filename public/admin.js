@@ -1,10 +1,10 @@
-/* ReviewQR admin console. The password is held in sessionStorage for this tab
-   and sent as the x-admin-token header. All text is rendered with textContent. */
+/* ReviewQR admin console.
+
+   Signing in is an email and a password; the session is an httpOnly cookie, so
+   nothing here holds a credential and there is nothing for a script on the page
+   to steal. All text is rendered with textContent. */
 (function () {
   'use strict';
-
-  var KEY = 'reviewqr:admin-token';
-  var token = '';
 
   var el = function (id) {
     return document.getElementById(id);
@@ -28,12 +28,21 @@
     if (kind === 'error' && message && window.toast) window.toast(message, 'error');
   }
 
+  // The CSRF cookie is readable on purpose: mutating requests echo it back in
+  // the header, and the server compares the two (double submit).
+  function cookie(name) {
+    var match = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[2]) : '';
+  }
+
   function api(path, options) {
     options = options || {};
-    var headers = { 'x-admin-token': token };
+    var headers = {};
+    var method = options.method || 'GET';
+    if (method !== 'GET') headers['x-csrf-token'] = cookie('rq_csrf');
     if (options.body !== undefined) headers['content-type'] = 'application/json';
     return fetch(path, {
-      method: options.method || 'GET',
+      method: method,
       headers: headers,
       credentials: 'same-origin',
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -211,8 +220,10 @@
   }
 
   function handle(error) {
+    // A session that expired while the tab sat open looks like this. Drop to
+    // the sign-in form rather than leaving a console that no longer works.
     if (error.status === 401) {
-      signOut('That password was not accepted. Please sign in again.');
+      signOut('Your session has ended. Please sign in again.');
       return;
     }
     status('error', error.message);
@@ -722,7 +733,7 @@
 
   // -------------------------------------------------------------------- tabs
 
-  var PANELS = ['businesses', 'reviews', 'people'];
+  var PANELS = ['businesses', 'reviews', 'people', 'account'];
 
   function showPanel(name) {
     PANELS.forEach(function (panel) {
@@ -743,70 +754,178 @@
 
   // ------------------------------------------------------------------- session
 
-  function signOut(message) {
-    token = '';
-    try {
-      sessionStorage.removeItem(KEY);
-    } catch (error) {
-      /* ignore */
-    }
-    el('console').classList.add('hidden');
-    el('sign-in').classList.remove('hidden');
-    el('password').value = '';
-    if (message) status('error', message);
-    el('password').focus();
-  }
+  var AUTH_PANES = ['signin', 'signup', 'forgot', 'reset'];
+  var account = null;
 
-  function signIn(candidate) {
-    token = candidate;
-    return api('/api/admin/businesses').then(function () {
-      try {
-        sessionStorage.setItem(KEY, candidate);
-      } catch (error) {
-        /* ignore */
-      }
-      el('sign-in').classList.add('hidden');
-      el('console').classList.remove('hidden');
-      status('', '');
-      showPanel('businesses');
+  function showAuthPane(name) {
+    AUTH_PANES.forEach(function (pane) {
+      el('pane-' + pane).classList.toggle('hidden', pane !== name);
     });
+    el('auth').classList.remove('hidden');
+    el('console').classList.add('hidden');
+    var first = el('pane-' + name).querySelector('input');
+    if (first) first.focus();
   }
 
-  el('sign-in').addEventListener('submit', function (event) {
-    event.preventDefault();
-    var candidate = el('password').value;
-    if (!candidate) {
-      status('error', 'Please enter the admin password.');
-      return;
-    }
-    var submit = el('sign-in-button');
+  function showConsole(owner) {
+    account = owner;
+    el('auth').classList.add('hidden');
+    el('console').classList.remove('hidden');
+    el('account-email').textContent = owner.email;
+    el('account-role').textContent = owner.isAdmin
+      ? 'Platform admin - you see every business on this server'
+      : 'Owner - you see the businesses you created';
+    // The reviewer list is platform-wide, so it is not an owner's business.
+    el('tab-people').classList.toggle('hidden', !owner.isAdmin);
+    status('', '');
+    showPanel('businesses');
+  }
+
+  // Kept for the 401 path elsewhere in this file: any request that comes back
+  // unauthorised drops us here rather than leaving a dead console on screen.
+  function signOut(message) {
+    account = null;
+    el('console').classList.add('hidden');
+    showAuthPane('signin');
+    if (message) status('error', message);
+  }
+
+  function describe(error) {
+    return error && error.message ? error.message : 'Something went wrong. Please try again.';
+  }
+
+  // Each form: disable the button, call the endpoint, re-enable whatever
+  // happens. Without the re-enable a failed attempt leaves a dead button.
+  function submitting(buttonId, working, run) {
+    var submit = el(buttonId);
     submit.disabled = true;
-    status('working', 'Checking the password.');
-    signIn(candidate)
+    status('working', working);
+    return run()
       .catch(function (error) {
-        token = '';
-        status('error', error.status === 401 ? 'That password was not accepted.' : error.message);
+        status('error', describe(error));
       })
       .then(function () {
         submit.disabled = false;
       });
+  }
+
+  document.querySelectorAll('[data-go]').forEach(function (anchor) {
+    anchor.addEventListener('click', function (event) {
+      event.preventDefault();
+      status('', '');
+      showAuthPane(anchor.dataset.go);
+    });
+  });
+
+  el('pane-signin').addEventListener('submit', function (event) {
+    event.preventDefault();
+    submitting('signin-button', 'Checking.', function () {
+      return api('/api/owner/login', {
+        method: 'POST',
+        body: { email: el('signin-email').value, password: el('signin-password').value },
+      }).then(function (data) {
+        el('signin-password').value = '';
+        showConsole(data.owner);
+      });
+    });
+  });
+
+  el('pane-signup').addEventListener('submit', function (event) {
+    event.preventDefault();
+    submitting('signup-button', 'Creating your account.', function () {
+      return api('/api/owner/signup', {
+        method: 'POST',
+        body: {
+          name: el('signup-name').value,
+          email: el('signup-email').value,
+          password: el('signup-password').value,
+        },
+      }).then(function (data) {
+        el('signup-password').value = '';
+        showConsole(data.owner);
+        if (window.toast) window.toast('Welcome. Add your first business below.');
+      });
+    });
+  });
+
+  el('pane-forgot').addEventListener('submit', function (event) {
+    event.preventDefault();
+    submitting('forgot-button', 'Sending a code.', function () {
+      var email = el('forgot-email').value;
+      return api('/api/owner/forgot', { method: 'POST', body: { email: email } }).then(function () {
+        el('reset-email').value = email;
+        showAuthPane('reset');
+        // Says "if", not "we sent": the server answers the same way whether or
+        // not that address has an account, and this message has to match.
+        status('ok', 'If that address has an account, a code is on its way.');
+      });
+    });
+  });
+
+  el('pane-reset').addEventListener('submit', function (event) {
+    event.preventDefault();
+    submitting('reset-button', 'Setting your new password.', function () {
+      return api('/api/owner/reset', {
+        method: 'POST',
+        body: {
+          email: el('reset-email').value,
+          code: el('reset-code').value,
+          newPassword: el('reset-password').value,
+        },
+      }).then(function (data) {
+        el('reset-code').value = '';
+        el('reset-password').value = '';
+        showConsole(data.owner);
+        if (window.toast) window.toast('Your password has been changed.');
+      });
+    });
+  });
+
+  el('change-password').addEventListener('submit', function (event) {
+    event.preventDefault();
+    submitting('change-password-button', 'Changing your password.', function () {
+      return api('/api/owner/password', {
+        method: 'POST',
+        body: {
+          currentPassword: el('current-password').value,
+          newPassword: el('new-password').value,
+        },
+      }).then(function () {
+        el('current-password').value = '';
+        el('new-password').value = '';
+        status('ok', 'Your password has been changed. Other browsers have been signed out.');
+      });
+    });
   });
 
   el('sign-out').addEventListener('click', function () {
-    signOut('You have signed out.');
+    api('/api/owner/logout', { method: 'POST' })
+      .catch(function () {
+        /* The cookie is gone either way; nothing useful to say. */
+      })
+      .then(function () {
+        signOut('');
+        if (window.toast) window.toast('You have signed out.');
+      });
   });
 
-  var saved = '';
-  try {
-    saved = sessionStorage.getItem(KEY) || '';
-  } catch (error) {
-    saved = '';
-  }
-  if (saved) {
-    signIn(saved).catch(function () {
-      signOut('Please sign in again.');
+  // What the page opens on depends on what the server says exists: a console
+  // if this browser is already signed in, the sign-up form on an install with
+  // no accounts yet, and the sign-in form otherwise.
+  api('/api/owner/me')
+    .then(function (data) {
+      el('forgot-wrap').classList.toggle('hidden', !data.canResetPassword);
+      if (data.owner) return showConsole(data.owner);
+      if (data.setupNeeded) {
+        el('signup-heading').textContent = 'Create the first account';
+        el('signup-note').textContent =
+          'Nobody has an account on this server yet, so this one runs it: you will see every business and every reviewer.';
+        return showAuthPane('signup');
+      }
+      return showAuthPane('signin');
+    })
+    .catch(function () {
+      showAuthPane('signin');
+      status('error', 'Could not reach the server. Please reload.');
     });
-  } else {
-    el('sign-in').classList.remove('hidden');
-  }
 })();

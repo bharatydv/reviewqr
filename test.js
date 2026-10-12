@@ -71,8 +71,13 @@ async function startApp(options = {}) {
 
   const mailer = {
     sent: [],
+    reset: [],
     async sendLoginCode(email, code) {
       this.sent.push({ email, code });
+      return { delivered: true, mode: 'test' };
+    },
+    async sendPasswordReset(email, code) {
+      this.reset.push({ email, code });
       return { delivered: true, mode: 'test' };
     },
   };
@@ -2476,4 +2481,393 @@ test('the pages and the stylesheet are served', async (t) => {
   }
   assert.equal((await client.request('/api/nothing-here')).status, 404);
   assert.equal((await client.request('/healthz')).json.ok, true);
+});
+
+// ----------------------------------------------------------- owner accounts
+
+// Signs a brand new owner up and returns their client.
+async function signUpOwner(app, email, password, name = 'Owner') {
+  const client = app.client();
+  await client.request('/api/owner/me');
+  const response = await client.request('/api/owner/signup', {
+    method: 'POST',
+    body: { email, password, name },
+  });
+  return { client, response };
+}
+
+async function createBusinessAs(client, name) {
+  return client.request('/api/admin/businesses', { method: 'POST', body: { name } });
+}
+
+test('the first account becomes a platform admin and adopts businesses that had no owner', async () => {
+  const app = await startApp();
+  try {
+    // The demo business was seeded before any account existed.
+    const orphan = app.db.prepare('SELECT id, owner_id FROM businesses').get();
+    assert.equal(orphan.owner_id, null);
+
+    const { response } = await signUpOwner(app, 'first@example.com', 'a-long-enough-password');
+    assert.equal(response.status, 201);
+    assert.equal(response.json.owner.isAdmin, true);
+
+    const adopted = app.db.prepare('SELECT owner_id FROM businesses WHERE id = ?').get(orphan.id);
+    assert.equal(adopted.owner_id, response.json.owner.id);
+
+    // The second account is an ordinary owner, not another admin.
+    const second = await signUpOwner(app, 'second@example.com', 'another-good-password');
+    assert.equal(second.response.status, 201);
+    assert.equal(second.response.json.owner.isAdmin, false);
+  } finally {
+    await app.close();
+  }
+});
+
+test('a wrong password and an unknown account are refused in the same words', async () => {
+  const app = await startApp();
+  try {
+    await signUpOwner(app, 'owner@example.com', 'a-long-enough-password');
+
+    const client = app.client();
+    await client.request('/api/owner/me');
+
+    const wrongPassword = await client.request('/api/owner/login', {
+      method: 'POST',
+      body: { email: 'owner@example.com', password: 'not-the-password' },
+    });
+    const startedAt = Date.now();
+    const noSuchAccount = await client.request('/api/owner/login', {
+      method: 'POST',
+      body: { email: 'nobody@example.com', password: 'not-the-password' },
+    });
+    const unknownTook = Date.now() - startedAt;
+
+    assert.equal(wrongPassword.status, 401);
+    assert.equal(noSuchAccount.status, 401);
+    // Same wording, so the form cannot be used to discover who has an account.
+    assert.equal(wrongPassword.json.error, noSuchAccount.json.error);
+    // And the same work: the unknown address is verified against a decoy hash,
+    // so it pays for scrypt too. Answering it without that cost would say "no
+    // such account" in the timing, however carefully the wording hides it.
+    // scrypt at these parameters is tens of milliseconds; a request that
+    // skipped it comes back in under one. The bar is well below the real cost
+    // so that a fast machine does not make this flaky.
+    assert.ok(unknownTook >= 10, `unknown account answered in ${unknownTook}ms, too fast to have hashed`);
+
+    const right = await client.request('/api/owner/login', {
+      method: 'POST',
+      body: { email: 'owner@example.com', password: 'a-long-enough-password' },
+    });
+    assert.equal(right.status, 200);
+    assert.equal(right.json.owner.email, 'owner@example.com');
+  } finally {
+    await app.close();
+  }
+});
+
+test('an owner sees only their own businesses', async () => {
+  const app = await startApp({ seedDemo: false });
+  try {
+    const alice = await signUpOwner(app, 'alice@example.com', 'alice-long-password');
+    await createBusinessAs(alice.client, "Alice's Cafe");
+
+    const bob = await signUpOwner(app, 'bob@example.com', 'bob-long-password-x');
+    await createBusinessAs(bob.client, "Bob's Garage");
+
+    const bobList = await bob.client.request('/api/admin/businesses');
+    assert.equal(bobList.json.businesses.length, 1);
+    assert.equal(bobList.json.businesses[0].name, "Bob's Garage");
+
+    // Alice is the first account, so she is a platform admin and sees both.
+    const aliceList = await alice.client.request('/api/admin/businesses');
+    assert.equal(aliceList.json.businesses.length, 2);
+  } finally {
+    await app.close();
+  }
+});
+
+test('one owner cannot read, edit or delete another owner\'s business', async () => {
+  const app = await startApp({ seedDemo: false });
+  try {
+    // The first account is an admin, so make two ordinary owners after it.
+    await signUpOwner(app, 'admin@example.com', 'admin-long-password');
+    const alice = await signUpOwner(app, 'alice@example.com', 'alice-long-password');
+    const bob = await signUpOwner(app, 'bob@example.com', 'bob-long-password-x');
+
+    const created = await createBusinessAs(alice.client, "Alice's Cafe");
+    const id = created.json.business.id;
+
+    const read = await bob.client.request(`/api/admin/businesses/${id}/reviews`);
+    const edited = await bob.client.request(`/api/admin/businesses/${id}`, {
+      method: 'PATCH',
+      body: { name: 'Stolen' },
+    });
+    const deleted = await bob.client.request(`/api/admin/businesses/${id}`, { method: 'DELETE' });
+
+    // 404 rather than 403: a 403 would confirm the id exists.
+    assert.equal(read.status, 404);
+    assert.equal(edited.status, 404);
+    assert.equal(deleted.status, 404);
+
+    // And it really is untouched.
+    const still = app.db.prepare('SELECT name FROM businesses WHERE id = ?').get(id);
+    assert.equal(still.name, "Alice's Cafe");
+  } finally {
+    await app.close();
+  }
+});
+
+test('a review can only be moderated by the owner of its business', async () => {
+  const app = await startApp();
+  try {
+    // The admin adopts the demo business, so its reviews belong to them.
+    const admin = await signUpOwner(app, 'admin@example.com', 'admin-long-password');
+    const stranger = await signUpOwner(app, 'stranger@example.com', 'stranger-password-1');
+
+    const reviews = await admin.client.request('/api/admin/reviews');
+    const reviewId = reviews.json.reviews[0].id;
+
+    const hidden = await stranger.client.request(`/api/admin/reviews/${reviewId}`, {
+      method: 'PATCH',
+      body: { status: 'hidden' },
+    });
+    assert.equal(hidden.status, 404);
+
+    const strangerList = await stranger.client.request('/api/admin/reviews');
+    assert.equal(strangerList.json.reviews.length, 0);
+
+    const mine = await admin.client.request(`/api/admin/reviews/${reviewId}`, {
+      method: 'PATCH',
+      body: { status: 'hidden' },
+    });
+    assert.equal(mine.status, 200);
+  } finally {
+    await app.close();
+  }
+});
+
+test('changing a password needs the current one, and signs other browsers out', async () => {
+  const app = await startApp({ seedDemo: false });
+  try {
+    const { client } = await signUpOwner(app, 'owner@example.com', 'the-first-password');
+
+    // A second browser, signed in as the same person.
+    const other = app.client();
+    await other.request('/api/owner/me');
+    await other.request('/api/owner/login', {
+      method: 'POST',
+      body: { email: 'owner@example.com', password: 'the-first-password' },
+    });
+    assert.ok((await other.request('/api/owner/me')).json.owner);
+
+    const wrong = await client.request('/api/owner/password', {
+      method: 'POST',
+      body: { currentPassword: 'wrong', newPassword: 'the-second-password' },
+    });
+    assert.equal(wrong.status, 403);
+
+    const short = await client.request('/api/owner/password', {
+      method: 'POST',
+      body: { currentPassword: 'the-first-password', newPassword: 'short' },
+    });
+    assert.equal(short.status, 400);
+
+    const changed = await client.request('/api/owner/password', {
+      method: 'POST',
+      body: { currentPassword: 'the-first-password', newPassword: 'the-second-password' },
+    });
+    assert.equal(changed.status, 200);
+
+    // This browser stays signed in; the other one does not.
+    assert.ok((await client.request('/api/owner/me')).json.owner);
+    assert.equal((await other.request('/api/owner/me')).json.owner, null);
+
+    // And the old password no longer works.
+    const stale = app.client();
+    await stale.request('/api/owner/me');
+    const refused = await stale.request('/api/owner/login', {
+      method: 'POST',
+      body: { email: 'owner@example.com', password: 'the-first-password' },
+    });
+    assert.equal(refused.status, 401);
+  } finally {
+    await app.close();
+  }
+});
+
+test('a reset code sets a new password once, and wrong codes are counted', async () => {
+  const app = await startApp({ seedDemo: false, env: { SMTP_HOST: 'smtp.example.com' } });
+  try {
+    await signUpOwner(app, 'owner@example.com', 'the-first-password');
+
+    const client = app.client();
+    await client.request('/api/owner/me');
+    const asked = await client.request('/api/owner/forgot', {
+      method: 'POST',
+      body: { email: 'owner@example.com' },
+    });
+    assert.equal(asked.status, 200);
+
+    const { code } = app.mailer.reset.at(-1);
+
+    const wrong = await client.request('/api/owner/reset', {
+      method: 'POST',
+      body: { email: 'owner@example.com', code: '000000', newPassword: 'a-brand-new-password' },
+    });
+    assert.equal(wrong.status, 400);
+
+    const reset = await client.request('/api/owner/reset', {
+      method: 'POST',
+      body: { email: 'owner@example.com', code, newPassword: 'a-brand-new-password' },
+    });
+    assert.equal(reset.status, 200);
+
+    // The code is spent, so it cannot be replayed.
+    const replay = await client.request('/api/owner/reset', {
+      method: 'POST',
+      body: { email: 'owner@example.com', code, newPassword: 'another-new-password' },
+    });
+    assert.equal(replay.status, 400);
+
+    // The new password works, the old one does not.
+    const fresh = app.client();
+    await fresh.request('/api/owner/me');
+    const good = await fresh.request('/api/owner/login', {
+      method: 'POST',
+      body: { email: 'owner@example.com', password: 'a-brand-new-password' },
+    });
+    assert.equal(good.status, 200);
+  } finally {
+    await app.close();
+  }
+});
+
+test('asking to reset an address with no account says the same as one with', async () => {
+  const app = await startApp({ seedDemo: false, env: { SMTP_HOST: 'smtp.example.com' } });
+  try {
+    await signUpOwner(app, 'owner@example.com', 'the-first-password');
+    const client = app.client();
+    await client.request('/api/owner/me');
+
+    const real = await client.request('/api/owner/forgot', {
+      method: 'POST',
+      body: { email: 'owner@example.com' },
+    });
+    const absent = await client.request('/api/owner/forgot', {
+      method: 'POST',
+      body: { email: 'nobody@example.com' },
+    });
+
+    assert.equal(real.status, absent.status);
+    assert.deepEqual(real.json, absent.json);
+    // Only the real one actually produced a code.
+    assert.equal(app.mailer.reset.length, 1);
+  } finally {
+    await app.close();
+  }
+});
+
+test('without SMTP, password reset says so rather than failing quietly', async () => {
+  const app = await startApp({ seedDemo: false });
+  try {
+    await signUpOwner(app, 'owner@example.com', 'the-first-password');
+    const client = app.client();
+    await client.request('/api/owner/me');
+
+    const asked = await client.request('/api/owner/forgot', {
+      method: 'POST',
+      body: { email: 'owner@example.com' },
+    });
+    assert.equal(asked.status, 503);
+    assert.match(asked.json.error, /cannot send email/i);
+
+    // And the page knows not to offer it in the first place.
+    const state = await client.request('/api/owner/me');
+    assert.equal(state.json.canResetPassword, false);
+  } finally {
+    await app.close();
+  }
+});
+
+test('the ADMIN_TOKEN still works, and still sees everything', async () => {
+  const app = await startApp({ seedDemo: false });
+  try {
+    const alice = await signUpOwner(app, 'alice@example.com', 'alice-long-password');
+    await createBusinessAs(alice.client, "Alice's Cafe");
+    const bob = await signUpOwner(app, 'bob@example.com', 'bob-long-password-x');
+    await createBusinessAs(bob.client, "Bob's Garage");
+
+    const token = app.client();
+    const all = await token.request('/api/admin/businesses', {
+      admin: 'test-admin-token-0123456789',
+    });
+    assert.equal(all.status, 200);
+    assert.equal(all.json.businesses.length, 2);
+  } finally {
+    await app.close();
+  }
+});
+
+test('the console refuses anyone who is neither signed in nor holding the token', async () => {
+  const app = await startApp({ seedDemo: false });
+  try {
+    const stranger = app.client();
+    const refused = await stranger.request('/api/admin/businesses');
+    assert.equal(refused.status, 401);
+
+    const wrongToken = await stranger.request('/api/admin/businesses', { admin: 'not-the-token' });
+    assert.equal(wrongToken.status, 401);
+  } finally {
+    await app.close();
+  }
+});
+
+test('the reviewer list is for platform admins, not for every owner', async () => {
+  const app = await startApp({ seedDemo: false });
+  try {
+    const admin = await signUpOwner(app, 'admin@example.com', 'admin-long-password');
+    const owner = await signUpOwner(app, 'owner@example.com', 'owner-long-password');
+
+    assert.equal((await admin.client.request('/api/admin/users')).status, 200);
+
+    const refused = await owner.client.request('/api/admin/users');
+    assert.equal(refused.status, 403);
+  } finally {
+    await app.close();
+  }
+});
+
+test('signing up is refused for a taken email, a bad address or a weak password', async () => {
+  const app = await startApp({ seedDemo: false });
+  try {
+    await signUpOwner(app, 'taken@example.com', 'a-long-enough-password');
+
+    const again = await signUpOwner(app, 'taken@example.com', 'a-long-enough-password');
+    assert.equal(again.response.status, 409);
+
+    const bad = await signUpOwner(app, 'not-an-email', 'a-long-enough-password');
+    assert.equal(bad.response.status, 400);
+
+    const weak = await signUpOwner(app, 'weak@example.com', 'short');
+    assert.equal(weak.response.status, 400);
+    assert.match(weak.response.json.error, /at least 10 characters/);
+  } finally {
+    await app.close();
+  }
+});
+
+test('signing out ends the session', async () => {
+  const app = await startApp({ seedDemo: false });
+  try {
+    const { client } = await signUpOwner(app, 'owner@example.com', 'a-long-enough-password');
+    assert.ok((await client.request('/api/owner/me')).json.owner);
+
+    const out = await client.request('/api/owner/logout', { method: 'POST' });
+    assert.equal(out.status, 200);
+
+    assert.equal((await client.request('/api/owner/me')).json.owner, null);
+    assert.equal((await client.request('/api/admin/businesses')).status, 401);
+  } finally {
+    await app.close();
+  }
 });

@@ -1258,3 +1258,33 @@ a.button-link:hover {
     print-color-adjust: exact;
   }
 }
+
+/* ------------------------------------------------------------ account facts */
+
+.account-facts {
+  display: grid;
+  gap: 0.15rem 1rem;
+  grid-template-columns: auto 1fr;
+  margin: 0;
+}
+
+.account-facts dt {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.account-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The auth card is a form you read top to bottom, not a dashboard. */
+#auth main,
+#auth {
+  margin: 0 auto;
+  max-width: 420px;
+}
+
+#auth .footnote a {
+  font-weight: 600;
+}
