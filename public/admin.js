@@ -229,6 +229,176 @@
     status('error', error.message);
   }
 
+  // --------------------------------------------------------------- NFC tags
+
+  /* A tag for a business is the same URL the QR code carries, written as an
+   * NDEF URI record. A phone held to it opens the profile exactly as scanning
+   * does - same page, same device cookie, same one review per business - so
+   * there is nothing to add on the server, and a tag goes out of date only
+   * when a printed code would: never, unless BASE_URL changes.
+   *
+   * Writing one from here uses Web NFC, which is Chrome on Android, over
+   * https, from a tap. Safari has no such API, so an iPhone can read tags but
+   * not write them. Hence two paths: the button where it works, and the URL to
+   * copy into a tag-writing app everywhere else.
+   */
+  function nfcWritable() {
+    return typeof window.NDEFReader === 'function';
+  }
+
+  // Web NFC rejects with DOM exception names rather than anything readable, and
+  // each one has a different thing for the person to go and do.
+  function nfcMessage(error) {
+    var name = error && error.name;
+    if (name === 'AbortError') return 'No tag was tapped. Try again and hold it to the back of the phone.';
+    if (name === 'NotAllowedError') return 'Permission to use NFC was refused. Allow it when the browser asks.';
+    if (name === 'NotSupportedError') return 'This phone has no NFC, or it is switched off in Android settings.';
+    if (name === 'NetworkError') return 'The tag could not be written. It may be locked already, or too small for this link.';
+    return (error && error.message) || 'The tag could not be written.';
+  }
+
+  // Both write and lock wait for a tag that may never arrive, so neither is
+  // allowed to hang a button for ever.
+  function nfcTimeout(ms) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () {
+      controller.abort();
+    }, ms);
+    return {
+      signal: controller.signal,
+      done: function () {
+        clearTimeout(timer);
+      },
+    };
+  }
+
+  function nfcRun(node, waiting, done, work) {
+    var label = node.textContent;
+    node.disabled = true;
+    node.textContent = waiting;
+    var guard = nfcTimeout(30000);
+    work(guard.signal)
+      .then(function () {
+        window.toast(done);
+      })
+      .catch(function (error) {
+        window.toast(nfcMessage(error), 'error');
+      })
+      .then(function () {
+        guard.done();
+        node.disabled = false;
+        node.textContent = label;
+      });
+  }
+
+  function copyUrl(value) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(value)
+        .then(function () {
+          window.toast('Link copied.');
+        })
+        .catch(function () {
+          window.toast('Could not copy. Select the link and copy it by hand.', 'error');
+        });
+      return;
+    }
+    // No Clipboard API: an http origin, or an older browser. The field is
+    // already on the page, so selecting it is the honest fallback.
+    window.toast('Select the link and copy it by hand.', 'error');
+  }
+
+  // The panel that opens under a business, mirroring the edit form.
+  function nfcPanel(business, onClose) {
+    var card = document.createElement('div');
+    card.className = 'card nfc-panel';
+
+    card.appendChild(text('h3', null, 'NFC tag for ' + business.name));
+    card.appendChild(
+      text(
+        'p',
+        'muted small',
+        'A tag holds this one link. Tapping it opens the same page as the printed code, ' +
+          'so one tag and one QR code can sit side by side on the counter.',
+      ),
+    );
+
+    var row = document.createElement('div');
+    row.className = 'nfc-url';
+    var field = document.createElement('input');
+    field.type = 'text';
+    field.readOnly = true;
+    field.value = business.url;
+    field.setAttribute('aria-label', 'The link to write to the tag');
+    // Selecting the whole thing on focus makes the manual copy one gesture.
+    field.addEventListener('focus', function () {
+      field.select();
+    });
+    row.appendChild(field);
+    row.appendChild(
+      button('Copy link', 'secondary', function () {
+        copyUrl(business.url);
+      }),
+    );
+    card.appendChild(row);
+
+    var actions = document.createElement('div');
+    actions.className = 'inline-actions';
+
+    if (nfcWritable()) {
+      actions.appendChild(
+        button('Write tag', 'secondary', function (node) {
+          nfcRun(node, 'Hold a tag to the phone…', 'Tag written. Tap it to check.', function (signal) {
+            return new window.NDEFReader().write(
+              { records: [{ recordType: 'url', data: business.url }] },
+              { signal: signal },
+            );
+          });
+        }),
+      );
+      actions.appendChild(
+        button('Lock tag', 'danger', function (node) {
+          // Irreversible in hardware, not just in this app, so it is asked
+          // plainly before a tag is ever held to the phone.
+          if (
+            !window.confirm(
+              'Locking a tag is permanent: it can be read for ever but never written again. ' +
+                'Only do this once the tag is written and tested.',
+            )
+          ) {
+            return;
+          }
+          nfcRun(node, 'Hold the tag to lock…', 'Tag locked. It is read-only now.', function (signal) {
+            return new window.NDEFReader().makeReadOnly({ signal: signal });
+          });
+        }),
+      );
+      card.appendChild(actions);
+      card.appendChild(
+        text(
+          'p',
+          'muted small',
+          'An NTAG213 sticker is large enough for this link. Write it, tap it to check the page ' +
+            'opens, then lock it - an unlocked tag on a counter can be rewritten by any passing phone.',
+        ),
+      );
+    } else {
+      card.appendChild(
+        text(
+          'p',
+          'muted small',
+          'This browser cannot write tags. Chrome on Android can, over https - open this console ' +
+            'on an Android phone and the button appears here. Otherwise copy the link above into a ' +
+            'tag-writing app (NFC Tools on Android, NXP TagWriter on iPhone) as a URL record.',
+        ),
+      );
+      card.appendChild(actions);
+    }
+
+    actions.appendChild(button('Close', 'secondary', onClose));
+    return card;
+  }
+
   // -------------------------------------------------------------- businesses
 
   // The whole list is fetched once and filtered here rather than on the server.
@@ -393,6 +563,20 @@
         poster.target = '_blank';
         poster.rel = 'noopener';
         actions.appendChild(poster);
+        actions.appendChild(
+          button('NFC tag', 'secondary', function () {
+            var open = row.nextSibling;
+            if (open && open.dataset && open.dataset.nfc === String(business.id)) {
+              open.remove();
+              return;
+            }
+            var panel = nfcPanel(business, function () {
+              panel.remove();
+            });
+            panel.dataset.nfc = String(business.id);
+            row.after(panel);
+          }),
+        );
         actions.appendChild(
           button('Reviews', 'secondary', function () {
             showPanel('reviews');

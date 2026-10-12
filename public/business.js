@@ -208,6 +208,47 @@
     });
   }
 
+  // Picking a draft hands the customer to Google: the words go on the
+  // clipboard and the review page opens in its own tab. Nothing here can fill
+  // Google's box for them - it is another origin, and the review link carries
+  // neither text nor rating - so copy-and-paste is the whole mechanism.
+  //
+  // Opened once per visit, not once per draft. Somebody comparing two drafts
+  // would otherwise collect a tab for each, and their Google tab is already
+  // sitting there waiting for a paste.
+  var googleOpened = false;
+  // Selecting a radio fires change and click, and browsers disagree about the
+  // order, so the same tap can arrive here twice. Copying the same words twice
+  // is harmless; opening two tabs is not.
+  var lastHandOff = '';
+
+  function handOffToGoogle(value) {
+    var url = googleUrl();
+    var wrap = el('draft-google');
+    if (!url) {
+      wrap.classList.add('hidden');
+      return;
+    }
+    if (value === lastHandOff) return;
+    lastHandOff = value;
+    wrap.classList.remove('hidden');
+    el('draft-google-link').href = url;
+    copyText(value, el('draft-copied'));
+
+    var hint = el('draft-google-hint');
+    if (googleOpened) {
+      hint.textContent = 'Paste this one instead, in the tab that is already open.';
+      return;
+    }
+    // Inside the tap that selected the draft, so this is a user gesture and
+    // not a popup. Some browsers refuse anyway, which is what the link is for.
+    var opened = window.open(url, '_blank', 'noopener');
+    googleOpened = Boolean(opened);
+    hint.textContent = opened
+      ? 'Google is open in a new tab. Tap its review box, paste, choose your stars and tap Post.'
+      : 'Tap the button below to open Google, then paste it into the review box.';
+  }
+
   // ------------------------------------------------------- Google One Tap
   //
   // Loaded only when the server was given a client id. If the customer is
@@ -370,9 +411,32 @@
     };
   }
 
+  // Tapping a star is the whole quick input: the drafts arrive on their own,
+  // so the customer goes from stars to choosing words in one gesture instead
+  // of hunting for a button. Topics and the note still refine it - that is
+  // what Regenerate is for.
+  //
+  // Debounced, and only until drafts exist. A customer sliding a finger from
+  // one star to five fires a change event per star, and each one is an AI call
+  // and one of the ten suggestions an hour this device is allowed; and once
+  // drafts are on screen, a changed rating must not silently replace words
+  // somebody is already editing.
+  var autoDraftTimer = null;
+
+  function scheduleAutoDrafts() {
+    if (autoDraftTimer) clearTimeout(autoDraftTimer);
+    if (!state.rating || state.drafts.length) return;
+    autoDraftTimer = setTimeout(function () {
+      autoDraftTimer = null;
+      if (!state.rating || state.drafts.length) return;
+      requestDrafts(el('suggest'), 'Thinking…');
+    }, 700);
+  }
+
   var newRating = wireRating('rating-new', function (value) {
     state.rating = value;
     saveDraft();
+    scheduleAutoDrafts();
   });
   var editRating = wireRating('rating-edit', function () {});
 
@@ -530,7 +594,18 @@
         el('comment').value = text;
         updateCounter();
         saveDraft();
+        handOffToGoogle(text);
+        // Focus stays on this page's textarea rather than following the new
+        // tab: the customer may want to edit the words before pasting, and a
+        // phone switching tabs does not move the caret anyway.
         el('comment').focus();
+      });
+
+      // The first draft starts selected, so the tap most people make first is
+      // on a radio that is already checked - which fires no change event at
+      // all. Without this, the obvious gesture would do nothing.
+      input.addEventListener('click', function () {
+        if (state.selected === index) handOffToGoogle(text);
       });
 
       var label = document.createElement('label');
@@ -757,6 +832,12 @@
   });
 
   function requestDrafts(button, label) {
+    // Tapping the button during the debounce window would otherwise spend a
+    // second call on the same answer.
+    if (autoDraftTimer) {
+      clearTimeout(autoDraftTimer);
+      autoDraftTimer = null;
+    }
     if (!state.rating) {
       status('error', 'Please choose a star rating first.');
       el('rating-new-5').focus();
@@ -777,11 +858,19 @@
         el('comment').value = state.comment;
         updateCounter();
         showStep('step-drafts');
+        // A fresh set of drafts, so the hand-off from the last one no longer
+        // describes anything on screen.
+        el('draft-google').classList.add('hidden');
+        el('draft-copied').textContent = '';
+        el('draft-google-hint').textContent = '';
+        lastHandOff = '';
         status(
           'ok',
-          data.source === 'ai'
-            ? 'Here are ' + data.drafts.length + ' drafts. Pick one and make it yours.'
-            : 'Here are ' + data.drafts.length + ' starting points. Pick one and make it yours.',
+          googleUrl()
+            ? 'Pick one: we copy it and open Google for you to paste it into.'
+            : data.source === 'ai'
+              ? 'Here are ' + data.drafts.length + ' drafts. Pick one and make it yours.'
+              : 'Here are ' + data.drafts.length + ' starting points. Pick one and make it yours.',
         );
         el('drafts').scrollIntoView({ block: 'start' });
       })

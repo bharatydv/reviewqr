@@ -186,6 +186,23 @@
             <textarea id="comment" maxlength="400" required></textarea>
             <p class="counter" id="comment-counter" aria-live="polite"></p>
 
+            <!-- Picking a draft copies it and opens Google, so the hand-off
+                 lives here rather than waiting until after posting. The link
+                 stays on the page: it is how you get back if the new tab was
+                 blocked, or if you picked a different draft afterwards. -->
+            <div id="draft-google" class="hidden">
+              <p class="small" id="draft-copied" role="status" aria-live="polite"></p>
+              <p class="small" id="draft-google-hint"></p>
+              <a
+                class="button-link"
+                id="draft-google-link"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Copy and open Google</a
+              >
+            </div>
+
             <div class="row">
               <button type="button" class="secondary" id="regenerate">Regenerate</button>
               <button type="button" id="post-review">Post review</button>

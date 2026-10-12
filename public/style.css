@@ -1288,3 +1288,30 @@ a.button-link:hover {
 #auth .footnote a {
   font-weight: 600;
 }
+
+/* The NFC panel under a business: a link to copy, and the buttons that write
+ * it to a tag. The field is readonly, so it reads as something to copy rather
+ * than something to fill in. */
+.nfc-panel h3 {
+  margin: 0 0 0.35rem;
+}
+
+.nfc-url {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.2rem;
+}
+
+.nfc-url input {
+  flex: 1 1 14rem;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.85rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.nfc-url button {
+  flex: 0 0 auto;
+  width: auto;
+}

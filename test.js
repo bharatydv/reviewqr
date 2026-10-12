@@ -1377,6 +1377,10 @@ test('an admin creates a business with a unique slug, sees its QR code and delet
   const created = listed.json.businesses.find((business) => business.id === first.json.business.id);
   assert.equal(created.reviewCount, 0);
   assert.equal(created.qrPng, '/api/b/blue-door-cafe-2/qr.png');
+  // The listed row carries the absolute link, not just the QR paths. That is
+  // what the NFC panel writes to a tag, and a relative one would write a tag
+  // that opens nothing.
+  assert.equal(created.url, 'http://localhost:3000/b/blue-door-cafe-2');
 
   const qr = await client.request('/api/b/blue-door-cafe-2/qr.svg');
   assert.equal(qr.status, 200);

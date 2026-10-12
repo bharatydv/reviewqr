@@ -113,7 +113,14 @@ Google's `Cache-Control` says. A token signed by anyone else, issued for another
 or expired is refused — there are tests for each of those.
 
 **3. Quick input.** A required star rating, optional topic chips and an optional one-line note,
-"Anything specific?" (200 characters).
+"Anything specific?" (200 characters). **Tapping a star is enough** — the drafts are fetched on
+their own, so the customer goes from stars straight to choosing words. Topics and the note refine
+the next set, which is what "Regenerate" is for.
+
+The automatic fetch is debounced by 700ms and happens only while there are no drafts on screen. A
+finger sliding from one star to five fires a change event per star, and each one would otherwise be
+an AI call and one of the ten suggestions an hour the device is allowed; and once drafts exist, a
+changed rating must not silently replace words somebody is already editing.
 
 The chips are **per business**, set in the admin console, because the right prompts depend on the
 trade: a café wants Service, Food, Price, Cleanliness, Staff, Atmosphere (the default six), while
@@ -125,15 +132,24 @@ offers, so a chosen topic is always a label the customer was really shown.
 longer) and tone (casual, warm, professional). The selected draft opens in an editable textarea
 with a live character counter (20–400). "Regenerate" asks for a new set.
 
+**Picking a draft hands the customer to Google straight away,** where a Google review link is set:
+the words go on the clipboard and Google's review box opens in its own tab, so the remaining
+gestures are paste, stars, Post. The tab is opened inside the tap that selected the draft, so it is
+a user gesture rather than a popup; a browser that refuses anyway leaves the button on the page.
+It opens once per visit, not once per draft — somebody comparing two drafts would otherwise collect
+a tab each, and their Google tab is already waiting for a paste. Selecting a different draft
+re-copies without opening anything. With no Google link set, none of this appears and picking a
+draft just fills the textarea.
+
 **5. Post.** One review per person per business, enforced by a `UNIQUE (business_id, user_id)`
 index — a second attempt returns 409. The new review appears at the top of the list. Coming back
 to the page later shows their own review with Edit and Delete instead of the form.
 
-**6. Post it on Google too (optional).** If the business has a Google review link set, the
-customer is then offered "Copy and open Google": their words go to the clipboard and Google's
-review box for that business opens in a new tab, where they paste, pick their stars and post. The
-offer stays available later from their own review on the page. With no link set, the step is
-hidden entirely and nothing changes.
+**6. Post it on Google too (optional).** The same offer again, after posting here: "Copy and open
+Google" puts their words on the clipboard and opens Google's review box in a new tab, where they
+paste, pick their stars and post. Step 4 is the main hand-off; this one catches anyone who posted
+here first, or whose tab was blocked, or who closed it. The offer stays available later from their
+own review on the page. With no link set, the step is hidden entirely and nothing changes.
 
 The control is a real link, so the browser treats it as an ordinary navigation and no popup
 blocker interferes. The clipboard API needs a secure context, so over plain `http` on a local
@@ -418,6 +434,31 @@ Printing notes:
   with two or three actual phones before you print a hundred.
 - The code contains `BASE_URL`, so **changing `BASE_URL` invalidates every code already printed.**
   Settle on the final domain before the first print run.
+
+## NFC tags
+
+A tag is the same link the QR code carries, written as an NDEF URI record. A phone held to it
+opens the same profile page — same device cookie, same one review per business — so there is
+nothing extra on the server, and a tag goes stale only when a printed code would: if `BASE_URL`
+changes.
+
+In the console, **NFC tag** under any business opens a panel holding the exact link to write, with
+a **Copy link** button. On Chrome for Android it also offers **Write tag**: hold a tag to the back
+of the phone and it is written on the spot, then **Lock tag** makes it permanent. The write buttons
+only appear where Web NFC exists — Chrome on Android, over https, which is the deployed console and
+not a LAN `http://` address. Safari has no Web NFC at all, so an iPhone can read tags but never
+write them; there, copy the link into a tag-writing app (NFC Tools on Android, NXP TagWriter on
+iPhone) as a URL record.
+
+- One tag per business, each carrying its own slug.
+- An **NTAG213** sticker has room to spare for a link this short. NTAG215 and 216 are the same
+  thing with more memory, and cost more for nothing you need here.
+- **Lock a tag once it is written and tested.** An unlocked tag on a counter can be rewritten by
+  any phone that passes, which is how your review tag becomes somebody else's link. Locking is
+  permanent in the hardware, not a setting this app can undo.
+- **Keep the printed code as well.** Modern iPhones and most Android phones read tags without an
+  app, but older handsets cannot read them at all, a tag can be peeled off, and a QR code works
+  from across a room. The two cost almost nothing together.
 
 ## Deploying
 
