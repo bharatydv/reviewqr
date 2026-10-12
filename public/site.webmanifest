@@ -1,0 +1,12 @@
+{
+  "name": "ReviewQR",
+  "short_name": "ReviewQR",
+  "description": "Scan a QR code, read a business's reviews, and write one.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f5f4",
+  "theme_color": "#0f7a6c",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

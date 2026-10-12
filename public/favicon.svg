@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ReviewQR">
+  <rect width="64" height="64" rx="14" fill="#0f7a6c" />
+  <g fill="#ffffff">
+    <!-- The three finder squares a QR code is recognised by, plus one star. -->
+    <path d="M14 14h16v16H14V14zm4 4v8h8v-8h-8z" />
+    <path d="M34 14h16v16H34V14zm4 4v8h8v-8h-8z" />
+    <path d="M14 34h16v16H14V34zm4 4v8h8v-8h-8z" />
+    <path d="M42 34.5l2.2 4.6 5 .7-3.6 3.5.85 5-4.45-2.35L37.55 48l.85-5-3.6-3.5 5-.7L42 34.5z" />
+  </g>
+</svg>

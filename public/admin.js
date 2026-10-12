@@ -375,6 +375,13 @@
         );
         actions.appendChild(link('Download PNG', business.qrPng + '?download=1', true));
         actions.appendChild(link('Download SVG', business.qrSvg + '?download=1', true));
+
+        // A new tab, not a download: the poster is a page you adjust and then
+        // print, and losing this list to get there would be a poor trade.
+        var poster = link('Print poster', '/b/' + business.slug + '/poster');
+        poster.target = '_blank';
+        poster.rel = 'noopener';
+        actions.appendChild(poster);
         actions.appendChild(
           button('Reviews', 'secondary', function () {
             showPanel('reviews');

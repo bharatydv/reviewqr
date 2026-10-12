@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Print a QR poster · ReviewQR</title>
+    <meta name="description" content="A print-ready poster carrying this business's review QR code." />
+    <meta name="robots" content="noindex" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Instrument+Sans:wght@400;600&display=swap"
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#0f7a6c" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1214" media="(prefers-color-scheme: dark)" />
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/ui.js"></script>
+  </head>
+  <body>
+    <header class="site-header no-print">
+      <a href="/">ReviewQR</a>
+      <span class="tag">Poster</span>
+      <span class="spacer"></span>
+      <button type="button" class="theme-toggle" data-theme-toggle></button>
+    </header>
+
+    <main class="poster-page">
+      <div class="card no-print" id="controls">
+        <h1>Print a poster</h1>
+        <p class="muted small">
+          Print at 100% scale - "fit to page" shrinks the code and the quiet border around it, which
+          is what phone cameras lock onto. Keep that white margin clear.
+        </p>
+
+        <label for="size">Size</label>
+        <select id="size">
+          <option value="a5">A5 - table card</option>
+          <option value="a4" selected>A4 - counter or wall</option>
+          <option value="square">Square - sticker or tent card</option>
+        </select>
+
+        <label for="headline">Headline</label>
+        <input type="text" id="headline" maxlength="60" value="Enjoyed your visit?" />
+
+        <label for="cta">Call to action</label>
+        <input type="text" id="cta" maxlength="60" value="Scan to leave a review" />
+
+        <button type="button" id="print">Print this poster</button>
+        <p class="status error hidden" id="poster-error"></p>
+      </div>
+
+      <!-- The only thing that reaches the printer. -->
+      <section class="poster a4" id="poster" aria-label="Poster preview">
+        <p class="poster-eyebrow" id="out-headline">Enjoyed your visit?</p>
+        <h2 class="poster-name" id="out-name"></h2>
+        <img class="poster-qr" id="out-qr" alt="" width="320" height="320" />
+        <p class="poster-cta" id="out-cta">Scan to leave a review</p>
+        <p class="poster-url" id="out-url"></p>
+      </section>
+    </main>
+
+    <script src="/poster.js"></script>
+  </body>
+</html>

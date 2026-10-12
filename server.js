@@ -1120,6 +1120,9 @@ export function createApp({ config, db, mailer, suggester, googleVerifier = null
 
   app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
   app.get('/admin', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'admin.html')));
+  // Before /b/:slug, so the poster is not read as a business called "poster".
+  app.get('/b/:slug/poster', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'poster.html')));
+
   app.get('/b/:slug', (req, res) => {
     const business = db
       .prepare('SELECT * FROM businesses WHERE slug = ?')

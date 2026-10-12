@@ -1142,3 +1142,119 @@ a.button-link:hover {
     grid-template-columns: 1fr 15rem;
   }
 }
+
+/* -------------------------------------------------------------- QR poster */
+
+.poster-page {
+  max-width: 560px;
+}
+
+/* The poster itself is always light, in both themes. It is going on paper:
+   printing a dark background wastes ink and, more to the point, an inverted
+   QR code is one many phone cameras will not read. */
+.poster {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  color: #101418;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.poster.a4 {
+  aspect-ratio: 1 / 1.414;
+}
+
+.poster.a5 {
+  aspect-ratio: 1 / 1.414;
+  max-width: 380px;
+}
+
+.poster.square {
+  aspect-ratio: 1 / 1;
+  max-width: 420px;
+}
+
+.poster-eyebrow {
+  color: #55606a;
+  font-size: 1.05rem;
+  margin: 0 0 0.35rem;
+}
+
+.poster-name {
+  font-family: var(--heading);
+  font-size: 1.8rem;
+  line-height: 1.15;
+  margin: 0 0 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.poster-qr {
+  background: #ffffff;
+  display: block;
+  height: auto;
+  max-width: 72%;
+  width: 320px;
+}
+
+.poster-cta {
+  font-family: var(--heading);
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.2rem;
+}
+
+.poster-url {
+  color: #55606a;
+  font-size: 0.9rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media print {
+  /* Only the poster reaches the paper. */
+  .no-print,
+  .site-header,
+  .site-footer,
+  #controls {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff;
+    margin: 0;
+    padding: 0;
+  }
+
+  main,
+  .poster-page {
+    margin: 0;
+    max-width: none;
+    padding: 0;
+  }
+
+  .poster {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    height: 100vh;
+    max-width: none;
+    page-break-after: avoid;
+    width: 100%;
+  }
+
+  /* Browsers drop background colours when printing unless asked; the code
+     needs its white field to scan. */
+  .poster,
+  .poster-qr {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
